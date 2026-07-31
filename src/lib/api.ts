@@ -4,17 +4,22 @@
  */
 
 function resolveBaseUrl(): string {
+  // In the browser, route all API calls through the Next.js proxy to avoid CORS.
+  // The proxy at /api/proxy/* forwards requests server-side to the FastAPI backend.
+  if (typeof window !== 'undefined') {
+    return '/api/proxy';
+  }
+
+  // On the server (SSR / API routes), call the backend directly.
   const raw =
     (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BACKEND_URL) || '';
 
-  // If env var is set, use it — but ensure it ends with /api
   if (raw && raw.trim().length > 0) {
-    const trimmed = raw.trim().replace(/\/+$/, ''); // strip trailing slashes
+    const trimmed = raw.trim().replace(/\/+$/, '');
     if (trimmed.endsWith('/api')) return trimmed;
     return `${trimmed}/api`;
   }
 
-  // Hard fallback
   return 'https://mindcast-backend.onrender.com/api';
 }
 
