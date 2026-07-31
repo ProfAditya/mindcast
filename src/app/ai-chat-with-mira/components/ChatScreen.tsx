@@ -4,11 +4,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Sparkles, AlertTriangle, X, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { mockConversations, mockQuickPrompts, mockWellnessContext } from '@/lib/mockData';
 import ChatMessage from './ChatMessage';
 import ContextPanel from './ContextPanel';
 import QuickPromptChips from './QuickPromptChips';
-import { chatApi } from '@/lib/api';
+import { chatApi, userContextApi, type UserContext } from '@/lib/api';
 
 export interface Message {
   id: string;
@@ -28,20 +27,60 @@ function detectCrisis(text: string): boolean {
   return CRISIS_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
+const QUICK_PROMPTS = [
+  { id: 'qp-01', text: "I\'m feeling anxious today", category: 'mood' },
+  { id: 'qp-02', text: "Help me wind down for sleep", category: 'sleep' },
+  { id: 'qp-03', text: "I need a moment of calm", category: 'meditation' },
+  { id: 'qp-04', text: "Reflect on my week with me", category: 'journal' },
+  { id: 'qp-05', text: "What patterns do you see in my data?", category: 'insights' },
+];
+
 export default function ChatScreen() {
-  const [messages, setMessages] = useState<Message[]>(
-    mockConversations.map((c) => ({ ...c, isStreaming: false }))
-  );
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [showContext, setShowContext] = useState(false);
   const [crisisDetected, setCrisisDetected] = useState(false);
+  const [context, setContext] = useState<UserContext | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Load conversation history and user context on mount
+  useEffect(() => {
+    const init = async () => {
+      setLoadingHistory(true);
+      try {
+        const [convResult, ctxResult] = await Promise.allSettled([
+          chatApi.getConversations(20),
+          userContextApi.get(),
+        ]);
+
+        if (convResult.status === 'fulfilled' && Array.isArray(convResult.value)) {
+          setMessages(
+            convResult.value.map((c) => ({
+              id: c.id,
+              role: c.role,
+              content: c.content,
+              created_at: c.created_at,
+              isStreaming: false,
+            }))
+          );
+        }
+
+        if (ctxResult.status === 'fulfilled') {
+          setContext(ctxResult.value);
+        }
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+    init();
+  }, []);
 
   const handleSend = async (text?: string) => {
     const messageText = text ?? input.trim();
@@ -73,7 +112,6 @@ export default function ChatScreen() {
     setIsStreaming(true);
 
     try {
-      // Try SSE streaming first
       await chatApi.streamMessage(
         messageText,
         (chunk) => {
@@ -90,46 +128,16 @@ export default function ChatScreen() {
           setIsStreaming(false);
         }
       );
-    } catch {
-      // Fallback: try non-streaming endpoint
-      try {
-        const response = await chatApi.sendMessage(messageText);
-        const responseText = response.content;
-        const words = responseText.split(' ');
-        let accumulated = '';
-        for (let i = 0; i < words.length; i++) {
-          accumulated += (i > 0 ? ' ' : '') + words[i];
-          const current = accumulated;
-          setMessages((prev) =>
-            prev.map((m) => m.id === streamingId ? { ...m, content: current } : m)
-          );
-          await new Promise((r) => setTimeout(r, 22));
-        }
-        setMessages((prev) =>
-          prev.map((m) => m.id === streamingId ? { ...m, isStreaming: false } : m)
-        );
-        setIsStreaming(false);
-      } catch {
-        // Final fallback: simulated response
-        const simulatedResponse = isCrisis
-          ? "I hear something heavy in what you've shared, and I want you to know I'm here with you right now.\n\nYour safety matters more than anything. Please reach out to the **988 Suicide & Crisis Lifeline** (call or text 988 in the US) or your local emergency services. You don't have to carry this alone.\n\nIf you feel safe enough to keep talking with me, I'm listening. What's been happening for you?"
-          : "That's something I've been thinking about too, based on what you've been sharing with me lately.\n\nYour energy levels have been genuinely improving — especially over the past week. The days when you exercise in the morning consistently show higher energy readings in the afternoon, which is a real pattern worth paying attention to.\n\n**What I'd suggest:**\n- Protect those morning movement windows, even if it's just 15 minutes\n- Notice how you feel on days you skip — not to judge, but to understand your own rhythm\n- Consider journaling after a good energy day to capture what contributed\n\nWhat feels most sustainable for you right now?";
-
-        const words = simulatedResponse.split(' ');
-        let accumulated = '';
-        for (let i = 0; i < words.length; i++) {
-          accumulated += (i > 0 ? ' ' : '') + words[i];
-          const current = accumulated;
-          setMessages((prev) =>
-            prev.map((m) => m.id === streamingId ? { ...m, content: current } : m)
-          );
-          await new Promise((r) => setTimeout(r, 28));
-        }
-        setMessages((prev) =>
-          prev.map((m) => m.id === streamingId ? { ...m, isStreaming: false } : m)
-        );
-        setIsStreaming(false);
-      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to get a response';
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === streamingId
+            ? { ...m, content: `Sorry, I couldn't respond right now. (${errorMsg})`, isStreaming: false }
+            : m
+        )
+      );
+      setIsStreaming(false);
     }
   };
 
@@ -138,10 +146,6 @@ export default function ChatScreen() {
       e.preventDefault();
       handleSend();
     }
-  };
-
-  const handleQuickPrompt = (text: string) => {
-    handleSend(text);
   };
 
   return (
@@ -210,6 +214,22 @@ export default function ChatScreen() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto scrollbar-thin px-4 py-6 space-y-2">
+          {loadingHistory && (
+            <div className="flex justify-center py-8">
+              <span className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            </div>
+          )}
+          {!loadingHistory && messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-center py-16">
+              <div className="w-16 h-16 rounded-full gradient-violet-rose flex items-center justify-center mb-4">
+                <Sparkles size={28} strokeWidth={1.5} className="text-white" />
+              </div>
+              <h3 className="font-heading font-semibold text-lg text-foreground mb-2">Hi, I&apos;m Mira</h3>
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Your personal wellness companion. Share what&apos;s on your mind and I&apos;ll listen.
+              </p>
+            </div>
+          )}
           <AnimatePresence initial={false}>
             {messages.map((message) => (
               <ChatMessage key={message.id} message={message} />
@@ -218,10 +238,10 @@ export default function ChatScreen() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick Prompts — only show when no streaming */}
-        {!isStreaming && messages.length <= 5 && (
+        {/* Quick Prompts — only show when no messages and not streaming */}
+        {!isStreaming && messages.length === 0 && !loadingHistory && (
           <div className="px-4 pb-2">
-            <QuickPromptChips prompts={mockQuickPrompts} onSelect={handleQuickPrompt} />
+            <QuickPromptChips prompts={QUICK_PROMPTS} onSelect={handleSend} />
           </div>
         )}
 
@@ -248,18 +268,15 @@ export default function ChatScreen() {
                   ? 'gradient-violet-rose text-white hover:opacity-90 active:scale-95'
                   : 'bg-muted text-muted-foreground cursor-not-allowed'
               )}
-              data-testid="send-message-btn"
+              data-testid="send-btn"
             >
               {isStreaming ? (
-                <span className="w-3 h-3 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <Send size={15} strokeWidth={1.5} />
+                <Send size={15} strokeWidth={2} />
               )}
             </button>
           </div>
-          <p className="text-[10px] text-muted-foreground text-center mt-2">
-            Mira is an AI companion. For emergencies, contact local services.
-          </p>
         </div>
       </div>
 
@@ -267,14 +284,13 @@ export default function ChatScreen() {
       <AnimatePresence>
         {showContext && (
           <motion.div
-            initial={{ opacity: 0, x: 20, width: 0 }}
-            animate={{ opacity: 1, x: 0, width: 320 }}
-            exit={{ opacity: 0, x: 20, width: 0 }}
-            transition={{ duration: 0.25, ease: 'easeOut' }}
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 320, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
             className="shrink-0 border-l border-border overflow-hidden"
-            data-testid="context-panel"
           >
-            <ContextPanel context={mockWellnessContext} onClose={() => setShowContext(false)} />
+            <ContextPanel context={context} onClose={() => setShowContext(false)} />
           </motion.div>
         )}
       </AnimatePresence>

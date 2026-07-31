@@ -9,11 +9,20 @@ import { getWellnessStage } from '@/lib/utils';
 const WellnessRadialChart = dynamic(() => import('./WellnessRadialChart'), { ssr: false });
 
 interface WellnessScoreCardProps {
-  score: number;
-  trend: string;
+  score?: number;
+  trend?: string;
 }
 
 export default function WellnessScoreCard({ score, trend }: WellnessScoreCardProps) {
+  if (score == null) {
+    return (
+      <div className="wellness-card h-full flex flex-col min-h-[280px] items-center justify-center">
+        <div className="w-24 h-24 rounded-full skeleton-shimmer mb-4" />
+        <div className="h-4 w-32 rounded skeleton-shimmer" />
+      </div>
+    );
+  }
+
   const stage = getWellnessStage(score);
 
   const stageColorMap: Record<string, string> = {
@@ -40,12 +49,10 @@ export default function WellnessScoreCard({ score, trend }: WellnessScoreCardPro
         </span>
       </div>
 
-      {/* Radial Chart */}
       <div className="flex-1 flex items-center justify-center py-2">
         <WellnessRadialChart score={score} />
       </div>
 
-      {/* Score Info */}
       <div className="mt-auto space-y-3">
         <div className="flex items-center gap-2">
           <TrendIcon size={14} strokeWidth={1.5} className={trendColor} />
@@ -54,11 +61,8 @@ export default function WellnessScoreCard({ score, trend }: WellnessScoreCardPro
           </span>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          You&apos;re <span className="text-foreground font-medium">{stage.label}</span> — your sleep and exercise patterns are your biggest strengths right now.
+          You&apos;re <span className="text-foreground font-medium">{stage.label}</span> — keep logging to see your trends.
         </p>
-        <button className="text-xs text-primary font-medium hover:underline flex items-center gap-1 font-heading">
-          View full assessment
-        </button>
       </div>
     </div>
   );

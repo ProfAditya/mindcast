@@ -55,12 +55,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
     if (stored) setUser({ name: stored.name, email: stored.email });
   }, [router]);
 
-  const handleLogout = async () => {
-    try {
-      await authApi.logout();
-    } catch {
-      // ignore
-    }
+  const handleLogout = () => {
+    authApi.logout();
     toast.success('Signed out');
     router.push('/sign-up-login-screen');
   };
