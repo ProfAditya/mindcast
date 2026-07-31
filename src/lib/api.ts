@@ -3,9 +3,22 @@
  * Connects to FastAPI backend at https://mindcast-backend.onrender.com/api
  */
 
-const BASE_URL =
-  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BACKEND_URL) ||
-  'https://mindcast-backend.onrender.com/api';
+function resolveBaseUrl(): string {
+  const raw =
+    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BACKEND_URL) || '';
+
+  // If env var is set, use it — but ensure it ends with /api
+  if (raw && raw.trim().length > 0) {
+    const trimmed = raw.trim().replace(/\/+$/, ''); // strip trailing slashes
+    if (trimmed.endsWith('/api')) return trimmed;
+    return `${trimmed}/api`;
+  }
+
+  // Hard fallback
+  return 'https://mindcast-backend.onrender.com/api';
+}
+
+const BASE_URL = resolveBaseUrl();
 
 // ─── Token Management ────────────────────────────────────────────────────────
 
@@ -63,10 +76,20 @@ async function request<T>(
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (networkErr) {
+    // TypeError: Failed to fetch — backend unreachable or CORS blocked
+    const msg =
+      networkErr instanceof TypeError
+        ? `Cannot reach the MindCast server. Please check your internet connection or try again later. (${networkErr.message})`
+        : `Network error: ${String(networkErr)}`;
+    throw new Error(msg);
+  }
 
   if (!res.ok) {
     let errorMsg = `API error ${res.status}`;
@@ -341,7 +364,7 @@ export const chatApi = {
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(`${BASE_URL}/chat`, {
+    let res = await fetch(`${BASE_URL}/chat`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ message }),
@@ -483,7 +506,7 @@ export const adminApi = {
     const token = getToken();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/admin/export/${format}`, { headers });
+    let res = await fetch(`${BASE_URL}/admin/export/${format}`, { headers });
     if (!res.ok) throw new Error(`Export failed: ${res.status}`);
     return res.blob();
   },
