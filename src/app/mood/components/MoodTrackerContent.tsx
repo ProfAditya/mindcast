@@ -2,13 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Smile, Zap, Wind, Plus, TrendingUp, Calendar, Check, X } from 'lucide-react';
+import { Smile, Zap, Wind, Plus, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { moodApi, type MoodEntry, type MoodEntryCreate } from '@/lib/api';
-import { mockMoodTrend } from '@/lib/mockData';
 import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from 'recharts';
-import Icon from '@/components/ui/AppIcon';
-
 
 const MOOD_OPTIONS = [
   { value: 'great', label: 'Great', emoji: '😄', color: 'emerald', bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-300 dark:border-emerald-700' },
@@ -18,14 +15,13 @@ const MOOD_OPTIONS = [
   { value: 'rough', label: 'Rough', emoji: '😞', color: 'violet', bg: 'bg-violet-100 dark:bg-violet-900/30', text: 'text-violet-700 dark:text-violet-300', border: 'border-violet-300 dark:border-violet-700' },
 ];
 
-const TAGS = ['anxious', 'calm', 'focused', 'tired', 'motivated', 'grateful', 'overwhelmed', 'hopeful', 'lonely', 'connected'];
-
 const moodToNum: Record<string, number> = { great: 5, good: 4, okay: 3, low: 2, rough: 1 };
 
-function SliderInput({ label, icon: Icon, value, onChange, min = 1, max = 10, color }: {
+function SliderInput({ label, icon: IconComp, value, onChange, min = 1, max = 10, color }: {
   label: string; icon: React.ElementType; value: number; onChange: (v: number) => void;
   min?: number; max?: number; color: string;
 }) {
+  const Icon = IconComp as React.ElementType;
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -38,8 +34,7 @@ function SliderInput({ label, icon: Icon, value, onChange, min = 1, max = 10, co
       <input
         type="range" min={min} max={max} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className={cn('w-full h-2 rounded-full appearance-none cursor-pointer', `accent-${color}-500`)}
-        style={{ background: `linear-gradient(to right, var(--wellness-${color === 'sky' ? 'sky' : color === 'rose' ? 'rose' : 'violet'}) ${(value - min) / (max - min) * 100}%, var(--muted) ${(value - min) / (max - min) * 100}%)` }}
+        className="w-full h-2 rounded-full appearance-none cursor-pointer"
       />
     </div>
   );
@@ -57,32 +52,25 @@ const itemVariants = {
 export default function MoodTrackerContent() {
   const [entries, setEntries] = useState<MoodEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showLogForm, setShowLogForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Form state
   const [selectedMood, setSelectedMood] = useState('');
   const [energy, setEnergy] = useState(5);
   const [stress, setStress] = useState(5);
   const [notes, setNotes] = useState('');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const loadEntries = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await moodApi.list(30);
       setEntries(data);
-    } catch {
-      // fallback to mock data
-      const mockEntries: MoodEntry[] = mockMoodTrend.map((d, i) => ({
-        id: `mock-${i}`,
-        user_id: 'user-001',
-        mood: d.mood,
-        energy: d.energy,
-        stress: d.stress,
-        created_at: new Date(Date.now() - (13 - i) * 86400000).toISOString(),
-      }));
-      setEntries(mockEntries);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load mood entries');
     } finally {
       setLoading(false);
     }
@@ -93,51 +81,43 @@ export default function MoodTrackerContent() {
   const handleSubmit = async () => {
     if (!selectedMood) return;
     setSubmitting(true);
+    setSubmitError(null);
     const payload: MoodEntryCreate = {
       mood: selectedMood,
-      energy,
-      stress,
+      energy_level: energy,
+      stress_level: stress,
       notes: notes.trim() || undefined,
-      tags: selectedTags.length > 0 ? selectedTags : undefined,
     };
     try {
       const newEntry = await moodApi.create(payload);
       setEntries((prev) => [newEntry, ...prev]);
-    } catch {
-      // optimistic update
-      const optimistic: MoodEntry = {
-        id: `local-${Date.now()}`,
-        user_id: 'user-001',
-        ...payload,
-        created_at: new Date().toISOString(),
-      };
-      setEntries((prev) => [optimistic, ...prev]);
-    } finally {
-      setSubmitting(false);
       setShowLogForm(false);
       setSelectedMood('');
       setEnergy(5);
       setStress(5);
       setNotes('');
-      setSelectedTags([]);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to save mood entry');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const chartData = entries.slice(0, 14).reverse().map((e) => ({
     date: new Date(e.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    energy: e.energy,
-    stress: e.stress,
+    energy: e.energy_level,
+    stress: e.stress_level,
     mood: moodToNum[e.mood] ?? 3,
   }));
 
-  const avgEnergy = entries.length > 0 ? (entries.reduce((s, e) => s + e.energy, 0) / entries.length).toFixed(1) : '—';
-  const avgStress = entries.length > 0 ? (entries.reduce((s, e) => s + e.stress, 0) / entries.length).toFixed(1) : '—';
+  const avgEnergy = entries.length > 0 ? (entries.reduce((s, e) => s + (e.energy_level ?? 0), 0) / entries.length).toFixed(1) : '—';
+  const avgStress = entries.length > 0 ? (entries.reduce((s, e) => s + (e.stress_level ?? 0), 0) / entries.length).toFixed(1) : '—';
   const dominantMood = entries.length > 0
     ? Object.entries(entries.reduce((acc, e) => { acc[e.mood] = (acc[e.mood] || 0) + 1; return acc; }, {} as Record<string, number>))
         .sort((a, b) => b[1] - a[1])[0]?.[0]
-    : 'good';
+    : null;
 
-  const dominantMoodOption = MOOD_OPTIONS.find((m) => m.value === dominantMood) ?? MOOD_OPTIONS[1];
+  const dominantMoodOption = MOOD_OPTIONS.find((m) => m.value === dominantMood) ?? null;
 
   return (
     <div className="px-6 lg:px-8 xl:px-10 py-8 pb-24 lg:pb-8 max-w-screen-xl">
@@ -207,26 +187,6 @@ export default function MoodTrackerContent() {
                 <SliderInput label="Stress" icon={Wind} value={stress} onChange={setStress} color="rose" />
               </div>
 
-              {/* Tags */}
-              <div className="mb-5">
-                <p className="text-xs font-medium font-heading text-muted-foreground uppercase tracking-wider mb-2">Tags</p>
-                <div className="flex flex-wrap gap-2">
-                  {TAGS.map((tag) => (
-                    <button
-                      key={tag}
-                      onClick={() => setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag])}
-                      className={cn(
-                        'px-3 py-1 rounded-full text-xs font-medium transition-all duration-150',
-                        selectedTags.includes(tag)
-                          ? 'bg-primary/15 text-primary border border-primary/30' :'bg-muted text-muted-foreground border border-transparent hover:border-border'
-                      )}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Notes */}
               <textarea
                 value={notes}
@@ -235,6 +195,10 @@ export default function MoodTrackerContent() {
                 rows={2}
                 className="input-field resize-none mb-5 text-sm"
               />
+
+              {submitError && (
+                <p className="text-xs text-rose-500 mb-3">{submitError}</p>
+              )}
 
               <button
                 onClick={handleSubmit}
@@ -248,7 +212,8 @@ export default function MoodTrackerContent() {
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <Check size={15} strokeWidth={1.5} /> Save Check-in
+                    <Check size={15} strokeWidth={2} />
+                    Save Entry
                   </span>
                 )}
               </button>
@@ -257,116 +222,112 @@ export default function MoodTrackerContent() {
         )}
       </AnimatePresence>
 
-      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
-        {/* Stats Row */}
-        <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: 'Check-ins', value: entries.length, icon: Calendar, color: 'violet' },
-            { label: 'Avg Energy', value: avgEnergy, icon: Zap, color: 'sky' },
-            { label: 'Avg Stress', value: avgStress, icon: Wind, color: 'rose' },
-            { label: 'Dominant Mood', value: dominantMoodOption.emoji + ' ' + dominantMoodOption.label, icon: Smile, color: 'emerald' },
-          ].map((stat) => (
-            <div key={stat.label} className="rounded-2xl bg-card border border-border p-4 card-shadow">
-              <div className="flex items-center gap-2 mb-2">
-                <stat.icon size={14} strokeWidth={1.5} className={`text-${stat.color}-500`} />
-                <span className="text-xs font-medium font-heading text-muted-foreground uppercase tracking-wider">{stat.label}</span>
+      {/* Error State */}
+      {error && (
+        <div className="mb-6 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 text-sm text-rose-600 dark:text-rose-400">
+          {error} —{' '}
+          <button onClick={loadEntries} className="underline font-medium">retry</button>
+        </div>
+      )}
+
+      {/* Summary Cards */}
+      {!loading && !error && (
+        <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-5">
+          <motion.div variants={itemVariants} className="grid grid-cols-3 gap-4">
+            <div className="rounded-2xl border border-border bg-card p-4 text-center">
+              <p className="text-2xl font-700 font-heading text-foreground">{entries.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">Total Check-ins</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card p-4 text-center">
+              <p className="text-2xl font-700 font-heading text-foreground">{avgEnergy}</p>
+              <p className="text-xs text-muted-foreground mt-1">Avg Energy</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card p-4 text-center">
+              {dominantMoodOption ? (
+                <>
+                  <p className="text-2xl">{dominantMoodOption.emoji}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Top Mood</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl font-700 font-heading text-foreground">—</p>
+                  <p className="text-xs text-muted-foreground mt-1">Top Mood</p>
+                </>
+              )}
+            </div>
+          </motion.div>
+
+          {/* Chart */}
+          {chartData.length > 0 && (
+            <motion.div variants={itemVariants} className="rounded-2xl border border-border bg-card p-6">
+              <h3 className="font-heading font-semibold text-base text-foreground mb-4">Energy & Stress Trend</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
+                  <defs>
+                    <linearGradient id="energyGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0EA5E9" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#0EA5E9" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="stressGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#FB7185" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#FB7185" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} interval={2} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} domain={[0, 10]} />
+                  <Tooltip
+                    contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '12px' }}
+                  />
+                  <Area type="monotone" dataKey="energy" stroke="#0EA5E9" strokeWidth={2} fill="url(#energyGrad)" dot={false} />
+                  <Area type="monotone" dataKey="stress" stroke="#FB7185" strokeWidth={2} fill="url(#stressGrad)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </motion.div>
+          )}
+
+          {/* Entry List */}
+          <motion.div variants={itemVariants} className="rounded-2xl border border-border bg-card p-6">
+            <h3 className="font-heading font-semibold text-base text-foreground mb-4">Recent Entries</h3>
+            {entries.length === 0 ? (
+              <div className="text-center py-10">
+                <Smile size={32} strokeWidth={1} className="text-muted-foreground/40 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No mood entries yet.</p>
+                <p className="text-xs text-muted-foreground mt-1">Tap &quot;Log Mood&quot; to start tracking.</p>
               </div>
-              <p className="font-heading font-semibold text-xl text-foreground">{stat.value}</p>
-            </div>
-          ))}
-        </motion.div>
-
-        {/* Chart */}
-        <motion.div variants={itemVariants} className="rounded-3xl bg-card border border-border p-6 card-shadow">
-          <div className="flex items-center gap-2 mb-5">
-            <TrendingUp size={16} strokeWidth={1.5} className="text-primary" />
-            <h3 className="font-heading font-semibold text-sm text-foreground">14-Day Trend</h3>
-          </div>
-          {loading ? (
-            <div className="h-48 skeleton-shimmer rounded-2xl" />
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
-                <defs>
-                  <linearGradient id="energyGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0EA5E9" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#0EA5E9" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="stressGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#FB7185" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#FB7185" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
-                <YAxis domain={[0, 10]} tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '12px' }}
-                  labelStyle={{ color: 'var(--foreground)', fontWeight: 600 }}
-                />
-                <Area type="monotone" dataKey="energy" stroke="#0EA5E9" strokeWidth={2} fill="url(#energyGrad)" name="Energy" dot={false} />
-                <Area type="monotone" dataKey="stress" stroke="#FB7185" strokeWidth={2} fill="url(#stressGrad)" name="Stress" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-          <div className="flex items-center gap-4 mt-3">
-            <div className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-sky-400 rounded-full" /><span className="text-xs text-muted-foreground">Energy</span></div>
-            <div className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-rose-400 rounded-full" /><span className="text-xs text-muted-foreground">Stress</span></div>
-          </div>
-        </motion.div>
-
-        {/* Recent Entries */}
-        <motion.div variants={itemVariants} className="rounded-3xl bg-card border border-border p-6 card-shadow">
-          <div className="flex items-center gap-2 mb-5">
-            <Calendar size={16} strokeWidth={1.5} className="text-primary" />
-            <h3 className="font-heading font-semibold text-sm text-foreground">Recent Check-ins</h3>
-          </div>
-          {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => <div key={i} className="h-14 skeleton-shimmer rounded-xl" />)}
-            </div>
-          ) : entries.length === 0 ? (
-            <div className="text-center py-10">
-              <Smile size={32} strokeWidth={1} className="text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No check-ins yet. Log your first mood above.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {entries.slice(0, 10).map((entry) => {
-                const moodOpt = MOOD_OPTIONS.find((m) => m.value === entry.mood) ?? MOOD_OPTIONS[1];
-                return (
-                  <motion.div
-                    key={entry.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="flex items-center gap-4 p-3 rounded-2xl hover:bg-muted/50 transition-colors"
-                  >
-                    <span className="text-2xl">{moodOpt.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={cn('text-sm font-semibold font-heading', moodOpt.text)}>{moodOpt.label}</span>
-                        {entry.tags?.map((tag) => (
-                          <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{tag}</span>
-                        ))}
+            ) : (
+              <div className="space-y-3">
+                {entries.slice(0, 10).map((entry) => {
+                  const moodOpt = MOOD_OPTIONS.find((m) => m.value === entry.mood);
+                  return (
+                    <div key={entry.id} className="flex items-center gap-4 py-3 border-b border-border last:border-0">
+                      <span className="text-xl">{moodOpt?.emoji ?? '😐'}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold font-heading text-foreground capitalize">{entry.mood}</span>
+                          <span className="text-xs text-muted-foreground">· E: {entry.energy_level}/10 · S: {entry.stress_level}/10</span>
+                        </div>
+                        {entry.notes && <p className="text-xs text-muted-foreground truncate mt-0.5">{entry.notes}</p>}
                       </div>
-                      {entry.notes && <p className="text-xs text-muted-foreground truncate mt-0.5">{entry.notes}</p>}
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Zap size={10} />{entry.energy}</span>
-                        <span className="flex items-center gap-1"><Wind size={10} />{entry.stress}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <span className="text-xs text-muted-foreground shrink-0">
                         {new Date(entry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </p>
+                      </span>
                     </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
         </motion.div>
-      </motion.div>
+      )}
+
+      {loading && (
+        <div className="space-y-4">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="rounded-2xl border border-border bg-card h-32 skeleton-shimmer" />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

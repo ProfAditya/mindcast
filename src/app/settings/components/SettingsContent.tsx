@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Settings, Bell, Moon, Sun, Shield, Trash2, LogOut, ChevronRight, Check, Monitor } from 'lucide-react';
+import { Bell, Moon, Sun, Shield, LogOut, ChevronRight, Check, Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
@@ -60,12 +60,8 @@ export default function SettingsContent() {
     miraMessages: true,
   });
 
-  const handleLogout = async () => {
-    try {
-      await authApi.logout();
-    } catch {
-      // ignore
-    }
+  const handleLogout = () => {
+    authApi.logout();
     toast.success('Signed out successfully');
     router.push('/sign-up-login-screen');
   };
@@ -116,7 +112,7 @@ export default function SettingsContent() {
           </div>
         </motion.div>
 
-        {/* Notifications */}
+        {/* Notifications — UI preference only, stored locally */}
         <motion.div variants={itemVariants} className="rounded-2xl border border-border bg-card p-6">
           <div className="flex items-center gap-2 mb-5">
             <Bell size={16} strokeWidth={1.5} className="text-primary" />
@@ -145,53 +141,31 @@ export default function SettingsContent() {
             <h3 className="font-heading font-700 text-base text-foreground">Privacy & Data</h3>
           </div>
           <div>
-            {[
-              { label: 'Export My Data', desc: 'Download all your wellness data as JSON' },
-              { label: 'Data Retention', desc: 'Manage how long your data is stored' },
-              { label: 'Privacy Policy', desc: 'Read our privacy policy' },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center justify-between py-4 border-b border-border last:border-0 cursor-pointer group">
-                <div>
-                  <p className="text-sm font-semibold font-heading text-foreground">{item.label}</p>
-                  <p className="text-xs text-muted-foreground">{item.desc}</p>
-                </div>
-                <ChevronRight size={16} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+            <div className="flex items-center justify-between py-4 border-b border-border">
+              <div>
+                <p className="text-sm font-semibold font-heading text-foreground">Privacy Policy</p>
+                <p className="text-xs text-muted-foreground">Read our privacy policy</p>
               </div>
-            ))}
+              <ChevronRight size={16} strokeWidth={1.5} className="text-muted-foreground" />
+            </div>
           </div>
         </motion.div>
 
-        {/* Danger Zone */}
-        <motion.div variants={itemVariants} className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-6">
-          <div className="flex items-center gap-2 mb-5">
-            <Trash2 size={16} strokeWidth={1.5} className="text-rose-500" />
-            <h3 className="font-heading font-700 text-base text-rose-600 dark:text-rose-400">Danger Zone</h3>
-          </div>
-          <div className="space-y-3">
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-card hover:border-rose-500/30 transition-colors group"
-            >
-              <div className="flex items-center gap-3">
-                <LogOut size={16} strokeWidth={1.5} className="text-muted-foreground group-hover:text-rose-500 transition-colors" />
-                <div className="text-left">
-                  <p className="text-sm font-semibold font-heading text-foreground">Sign Out</p>
-                  <p className="text-xs text-muted-foreground">Sign out of your account</p>
-                </div>
+        {/* Sign Out */}
+        <motion.div variants={itemVariants} className="rounded-2xl border border-border bg-card p-6">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-card hover:border-rose-500/30 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <LogOut size={16} strokeWidth={1.5} className="text-muted-foreground group-hover:text-rose-500 transition-colors" />
+              <div className="text-left">
+                <p className="text-sm font-semibold font-heading text-foreground">Sign Out</p>
+                <p className="text-xs text-muted-foreground">Sign out of your account</p>
               </div>
-              <ChevronRight size={16} strokeWidth={1.5} className="text-muted-foreground" />
-            </button>
-            <button className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 transition-colors group">
-              <div className="flex items-center gap-3">
-                <Trash2 size={16} strokeWidth={1.5} className="text-rose-500" />
-                <div className="text-left">
-                  <p className="text-sm font-semibold font-heading text-rose-600 dark:text-rose-400">Delete Account</p>
-                  <p className="text-xs text-muted-foreground">Permanently delete all your data</p>
-                </div>
-              </div>
-              <ChevronRight size={16} strokeWidth={1.5} className="text-rose-500" />
-            </button>
-          </div>
+            </div>
+            <ChevronRight size={16} strokeWidth={1.5} className="text-muted-foreground" />
+          </button>
         </motion.div>
       </motion.div>
     </div>
