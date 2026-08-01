@@ -1211,10 +1211,11 @@ function ContactSection() {
                 <button onClick={() => setSent(false)} className="text-sm text-violet-400 hover:text-violet-300 transition-colors">Send another</button>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-5" suppressHydrationWarning>
                 <div>
                   <label className="block text-xs text-white/40 mb-2 font-medium">Name</label>
                   <input
+                    suppressHydrationWarning
                     type="text"
                     required
                     value={form.name}
@@ -1227,6 +1228,7 @@ function ContactSection() {
                 <div>
                   <label className="block text-xs text-white/40 mb-2 font-medium">Email</label>
                   <input
+                    suppressHydrationWarning
                     type="email"
                     required
                     value={form.email}
@@ -1239,6 +1241,7 @@ function ContactSection() {
                 <div>
                   <label className="block text-xs text-white/40 mb-2 font-medium">Message</label>
                   <textarea
+                    suppressHydrationWarning
                     required
                     rows={5}
                     value={form.message}
@@ -1248,7 +1251,7 @@ function ContactSection() {
                     style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
                   />
                 </div>
-                <button type="submit"
+                <button suppressHydrationWarning type="submit"
                   className="w-full py-3.5 rounded-xl font-semibold text-white text-sm transition-all hover:opacity-90 hover:-translate-y-0.5"
                   style={{ background: 'linear-gradient(135deg, #7C3AED, #A855F7)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)' }}>
                   Send message
@@ -1351,7 +1354,7 @@ function Footer() {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 export default function LandingPage() {
   return (
-    <div className="min-h-screen text-white" style={{ background: '#06080F' }}>
+    <div suppressHydrationWarning className="min-h-screen text-white" style={{ background: '#06080F' }}>
       <AnimatedBackground />
       <Navbar />
       <main>
