@@ -277,6 +277,7 @@ function HeroSection() {
           </svg>
         </Link>
         <button
+          suppressHydrationWarning
           className="flex items-center gap-2.5 px-7 py-3.5 rounded-full font-semibold text-white/80 text-sm transition-all duration-300 hover:text-white hover:bg-white/8 hover:-translate-y-0.5"
           style={{ border: '1px solid rgba(255,255,255,0.12)' }}
         >
