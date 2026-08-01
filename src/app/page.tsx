@@ -986,6 +986,17 @@ function FeaturePreviews() {
 
 // ─── Analytics Preview ───────────────────────────────────────────────────────
 function AnalyticsPreview() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const chartData = Array.from({ length: 30 }, (_, i) => ({
+    mood: 50 + Math.sin(i * 0.4) * 25 + ((i * 7 + 3) % 15),
+    energy: 45 + Math.cos(i * 0.3) * 20 + ((i * 11 + 5) % 15),
+  }));
+
   return (
     <section className="py-28 px-6">
       <div className="max-w-6xl mx-auto">
@@ -1036,14 +1047,13 @@ function AnalyticsPreview() {
             <div className="rounded-xl p-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
               <div className="text-xs text-white/30 mb-4">Mood & Energy — 30 days</div>
               <div className="flex items-end gap-1 h-32">
-                {Array.from({ length: 30 }, (_, i) => ({
-                  mood: 50 + Math.sin(i * 0.4) * 25 + ((i * 7 + 3) % 15),
-                  energy: 45 + Math.cos(i * 0.3) * 20 + ((i * 11 + 5) % 15),
-                })).map((d, i) => (
+                {mounted ? chartData.map((d, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
                     <div className="w-full rounded-t-sm opacity-70" style={{ height: `${d.mood}%`, background: '#7C3AED' }} />
                   </div>
-                ))}
+                )) : (
+                  <div className="w-full h-full" />
+                )}
               </div>
               <div className="flex items-center gap-4 mt-3">
                 <div className="flex items-center gap-1.5 text-xs text-white/30">
