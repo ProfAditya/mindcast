@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import { Manrope, Figtree, Playfair_Display } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import '../styles/tailwind.css';
 
 const manrope = Manrope({
@@ -48,27 +49,29 @@ export default function RootLayout({
       className={`${manrope.variable} ${figtree.variable} ${playfairDisplay.variable}`}
       suppressHydrationWarning
     >
-      <body className={figtree.className}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem={false}
-          disableTransitionOnChange
-        >
-          {children}
-          <Toaster
-            position="bottom-right"
-            toastOptions={{
-              style: {
-                background: 'var(--card)',
-                color: 'var(--foreground)',
-                border: '1px solid var(--border)',
-                borderRadius: '12px',
-                fontFamily: 'var(--font-figtree)',
-              },
-            }}
-          />
-        </ThemeProvider>
+      <body className={figtree.className} suppressHydrationWarning>
+        <ErrorBoundary>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem={false}
+            disableTransitionOnChange
+          >
+            {children}
+            <Toaster
+              position="bottom-right"
+              toastOptions={{
+                style: {
+                  background: 'var(--card)',
+                  color: 'var(--foreground)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '12px',
+                  fontFamily: 'var(--font-figtree)',
+                },
+              }}
+            />
+          </ThemeProvider>
+        </ErrorBoundary>
 
         <script type="module" async src="https://static.rocket.new/rocket-web.js?_cfg=https%3A%2F%2Fmindcast3372back.builtwithrocket.new&_be=https%3A%2F%2Fappanalytics.rocket.new&_v=0.1.20" />
         <script type="module" defer src="https://static.rocket.new/rocket-shot.js?v=0.0.2" /></body>
