@@ -954,6 +954,7 @@ function FeaturePreviews() {
         <div className="flex justify-center gap-2 mb-8">
           {tabs.map((tab, i) => (
             <button key={tab.label} onClick={() => setActive(i)}
+              suppressHydrationWarning
               className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200"
               style={active === i
                 ? { background: `${tab.color}20`, color: tab.color, border: `1px solid ${tab.color}40` }
