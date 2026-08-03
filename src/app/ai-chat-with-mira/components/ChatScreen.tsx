@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import ChatMessage from './ChatMessage';
 import ContextPanel from './ContextPanel';
 import QuickPromptChips from './QuickPromptChips';
-import { chatApi, userContextApi, type UserContext } from '@/lib/api';
+import { chatApi, userContextApi, assessmentsApi, moodApi, habitLogsApi, type UserContext, type AssessmentResult, type MoodEntry, type HabitLog } from '@/lib/api';
 
 export interface Message {
   id: string;
@@ -43,6 +43,9 @@ export default function ChatScreen() {
   const [crisisDetected, setCrisisDetected] = useState(false);
   const [context, setContext] = useState<UserContext | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [assessmentData, setAssessmentData] = useState<AssessmentResult | null>(null);
+  const [recentMoods, setRecentMoods] = useState<MoodEntry[]>([]);
+  const [recentHabits, setRecentHabits] = useState<HabitLog[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -55,9 +58,12 @@ export default function ChatScreen() {
     const init = async () => {
       setLoadingHistory(true);
       try {
-        const [convResult, ctxResult] = await Promise.allSettled([
+        const [convResult, ctxResult, assessResult, moodResult, habitResult] = await Promise.allSettled([
           chatApi.getConversations(20),
           userContextApi.get(),
+          assessmentsApi.getLatest(),
+          moodApi.list(7),
+          habitLogsApi.list(),
         ]);
 
         if (convResult.status === 'fulfilled' && Array.isArray(convResult.value)) {
@@ -74,6 +80,18 @@ export default function ChatScreen() {
 
         if (ctxResult.status === 'fulfilled') {
           setContext(ctxResult.value);
+        }
+
+        if (assessResult.status === 'fulfilled' && assessResult.value) {
+          setAssessmentData(assessResult.value);
+        }
+
+        if (moodResult.status === 'fulfilled' && Array.isArray(moodResult.value)) {
+          setRecentMoods(moodResult.value.slice(0, 7));
+        }
+
+        if (habitResult.status === 'fulfilled' && Array.isArray(habitResult.value)) {
+          setRecentHabits(habitResult.value);
         }
       } finally {
         setLoadingHistory(false);

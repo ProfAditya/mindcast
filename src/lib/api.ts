@@ -444,16 +444,35 @@ export const askMyDataApi = {
 
 // ─── Assessments API ──────────────────────────────────────────────────────────
 
+export interface AssessmentResult {
+  id?: string;
+  overall_score?: number;
+  stress_score?: number;
+  sleep_score?: number;
+  psychology_score?: number;
+  lifestyle_score?: number;
+  created_at?: string;
+  answers?: Array<{ question_id: string; value: number }>;
+}
+
 export const assessmentsApi = {
   async getQuestions(): Promise<Array<{ id: string; question: string; type: string }>> {
     return request<Array<{ id: string; question: string; type: string }>>('/assessments/questions');
   },
 
-  async submit(answers: Array<{ question_id: string; value: number }>): Promise<Record<string, unknown>> {
-    return request<Record<string, unknown>>('/assessments', {
+  async submit(answers: Array<{ question_id: string; value: number }>): Promise<AssessmentResult> {
+    return request<AssessmentResult>('/assessments', {
       method: 'POST',
       body: JSON.stringify(answers),
     });
+  },
+
+  async getLatest(): Promise<AssessmentResult | null> {
+    try {
+      return await request<AssessmentResult>('/assessments/latest');
+    } catch {
+      return null;
+    }
   },
 };
 

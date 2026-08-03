@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AppLogo from '@/components/ui/AppLogo';
 import { useTheme } from 'next-themes';
-import { LayoutDashboard, MessageCircle, BarChart3, BookOpen, Activity, Lightbulb, Settings, LogOut, ChevronLeft, Moon, Sun, Bell, FlaskConical, Heart, Dna, User,  } from 'lucide-react';
+import { LayoutDashboard, MessageCircle, BarChart3, BookOpen, Activity, Lightbulb, Settings, LogOut, ChevronLeft, Moon, Sun, Bell, FlaskConical, Heart, Dna, User, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authApi, getStoredUser, isAuthenticated } from '@/lib/api';
 import { toast } from 'sonner';
@@ -20,6 +20,7 @@ const navItems = [
   { id: 'nav-journal', href: '/journal', label: 'Journal', icon: BookOpen },
   { id: 'nav-analytics', href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { id: 'nav-wellness-dna', href: '/wellness-dna', label: 'Wellness DNA', icon: Dna },
+  { id: 'nav-assessment', href: '/wellness-assessment', label: 'Assessment', icon: ClipboardList },
   { id: 'nav-experiments', href: '/experiments', label: 'Experiments', icon: FlaskConical },
   { id: 'nav-toolkit', href: '/toolkit', label: 'Toolkit', icon: Lightbulb },
 ];
