@@ -144,14 +144,18 @@ export default function ChatScreen() {
             prev.map((m) => m.id === streamingId ? { ...m, isStreaming: false } : m)
           );
           setIsStreaming(false);
+        },
+        {
+          assessmentData,
+          recentMoods,
+          recentHabits,
         }
       );
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to get a response';
+    } catch {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === streamingId
-            ? { ...m, content: `Sorry, I couldn't respond right now. (${errorMsg})`, isStreaming: false }
+            ? { ...m, content: "I'm here with you. Something went a little sideways on my end — please try sending your message again. 💙", isStreaming: false }
             : m
         )
       );

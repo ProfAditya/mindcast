@@ -354,64 +354,76 @@ export const chatApi = {
   },
 
   /**
-   * POST /chat — SSE stream.
-   * Each chunk: "data: {text: '...'}"
-   * End:        "data: {done: true}"
+   * POST /api/chat — local Next.js route with LLM + fallback.
+   * Streams SSE: "data: {text: '...'}" / "data: {done: true}"
    */
   async streamMessage(
     message: string,
     onChunk: (text: string) => void,
-    onDone: () => void
+    onDone: () => void,
+    context?: {
+      assessmentData?: AssessmentResult | null;
+      recentMoods?: Array<{ mood: string; energy_level?: number; stress_level?: number; created_at?: string }>;
+      recentHabits?: Array<{ habit_type: string; value: number; unit?: string; completed?: boolean }>;
+    }
   ): Promise<void> {
-    const token = getToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    let res = await fetch(`${BASE_URL}/chat`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ message }),
-    });
+    let res: Response;
+    try {
+      res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          assessmentData: context?.assessmentData ?? null,
+          recentMoods: context?.recentMoods ?? [],
+          recentHabits: context?.recentHabits ?? [],
+        }),
+      });
+    } catch {
+      // Network error — use a graceful fallback message via fake stream
+      onChunk("I'm here with you. It looks like there was a connection issue on my end. Please try again in a moment — I'm not going anywhere. 💙");
+      onDone();
+      return;
+    }
 
     if (!res.ok || !res.body) {
-      let errorMsg = `Chat error ${res.status}`;
-      try {
-        const err = await res.json();
-        errorMsg = err.detail || err.message || errorMsg;
-      } catch { /* ignore */ }
-      throw new Error(errorMsg);
+      onChunk("I'm here with you. Something went wrong on my end, but I don't want to leave you without support. Please try sending your message again. 💙");
+      onDone();
+      return;
     }
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.done) {
-              onDone();
-              return;
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.done) {
+                onDone();
+                return;
+              }
+              if (parsed.text) onChunk(parsed.text);
+            } catch {
+              // non-JSON chunk — ignore
             }
-            if (parsed.text) onChunk(parsed.text);
-          } catch {
-            // non-JSON chunk — ignore
           }
         }
       }
+    } catch {
+      // Stream read error — still call onDone to unblock UI
+    } finally {
+      onDone();
     }
-
-    onDone();
   },
 };
 
