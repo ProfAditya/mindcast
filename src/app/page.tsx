@@ -175,6 +175,7 @@ function Navbar() {
 
         {/* Mobile Menu Button */}
         <button
+          suppressHydrationWarning
           className="md:hidden p-2 text-white/70 hover:text-white"
           onClick={() => setMenuOpen(!menuOpen)}
           aria-label="Toggle menu"
