@@ -11,6 +11,14 @@ interface ChatRequestBody {
     psychology_score?: number;
     lifestyle_score?: number;
   } | null;
+  assessmentHistory?: Array<{
+    overall_score?: number;
+    stress_score?: number;
+    sleep_score?: number;
+    psychology_score?: number;
+    lifestyle_score?: number;
+    created_at?: string;
+  }>;
   recentMoods?: Array<{
     mood: string;
     energy_level?: number;
@@ -28,7 +36,7 @@ interface ChatRequestBody {
 // ─── Wellness Fallback Engine ─────────────────────────────────────────────────
 
 function buildSystemPrompt(body: ChatRequestBody): string {
-  const { assessmentData, recentMoods, recentHabits } = body;
+  const { assessmentData, assessmentHistory, recentMoods, recentHabits } = body;
 
   let contextBlock = '';
 
@@ -45,6 +53,42 @@ function buildSystemPrompt(body: ChatRequestBody): string {
 - Sleep Quality: ${sleepScore}/100
 - Psychological Wellbeing: ${psychScore}/100
 - Lifestyle Balance: ${lifeScore}/100`;
+  }
+
+  // Assessment history trend analysis
+  if (assessmentHistory && assessmentHistory.length >= 2) {
+    const sorted = [...assessmentHistory].sort(
+      (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
+    );
+    const scores = sorted.map((a) => a.overall_score).filter((s): s is number => s != null);
+    if (scores.length >= 2) {
+      const oldest = scores[0];
+      const latest = scores[scores.length - 1];
+      const change = latest - oldest;
+      const direction = change > 3 ? 'improving' : change < -3 ? 'declining' : 'stable';
+      const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+
+      // Sector trends
+      const stressScores = sorted.map((a) => a.stress_score).filter((s): s is number => s != null);
+      const sleepScores = sorted.map((a) => a.sleep_score).filter((s): s is number => s != null);
+      const psychScores = sorted.map((a) => a.psychology_score).filter((s): s is number => s != null);
+      const lifeScores = sorted.map((a) => a.lifestyle_score).filter((s): s is number => s != null);
+
+      const sectorTrend = (arr: number[]) => {
+        if (arr.length < 2) return 'N/A';
+        const d = arr[arr.length - 1] - arr[0];
+        return d > 3 ? 'improving' : d < -3 ? 'declining' : 'stable';
+      };
+
+      contextBlock += `\n\nAssessment History Trends (${scores.length} assessments):
+- Overall trend: ${direction} (${change >= 0 ? '+' : ''}${change.toFixed(0)} pts from first to latest)
+- Average wellness score: ${avgScore}/100
+- Stress Management trend: ${sectorTrend(stressScores)}
+- Sleep Quality trend: ${sectorTrend(sleepScores)}
+- Psychological Wellbeing trend: ${sectorTrend(psychScores)}
+- Lifestyle Balance trend: ${sectorTrend(lifeScores)}
+- Score history: ${scores.join(' → ')}`;
+    }
   }
 
   if (recentMoods && recentMoods.length > 0) {
@@ -68,7 +112,8 @@ Guidelines:
 - Always respond with warmth, empathy, and encouragement
 - Keep responses concise (2–4 paragraphs) and conversational
 - Offer practical, actionable wellness tips when relevant
-- Reference the user's wellness data naturally when it adds value
+- Reference the user's wellness data naturally when it adds value — including their score trends over time
+- When assessment history shows improvement, celebrate it; when declining, respond with extra care and targeted advice
 - Never be clinical or cold — be like a caring, knowledgeable friend
 - If the user seems distressed, prioritize emotional validation before advice
 - Avoid generic platitudes; be specific and personal${contextBlock}`;

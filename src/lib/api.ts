@@ -363,6 +363,7 @@ export const chatApi = {
     onDone: () => void,
     context?: {
       assessmentData?: AssessmentResult | null;
+      assessmentHistory?: AssessmentResult[];
       recentMoods?: Array<{ mood: string; energy_level?: number; stress_level?: number; created_at?: string }>;
       recentHabits?: Array<{ habit_type: string; value: number; unit?: string; completed?: boolean }>;
     }
@@ -375,6 +376,7 @@ export const chatApi = {
         body: JSON.stringify({
           message,
           assessmentData: context?.assessmentData ?? null,
+          assessmentHistory: context?.assessmentHistory ?? [],
           recentMoods: context?.recentMoods ?? [],
           recentHabits: context?.recentHabits ?? [],
         }),
@@ -484,6 +486,14 @@ export const assessmentsApi = {
       return await request<AssessmentResult>('/assessments/latest');
     } catch {
       return null;
+    }
+  },
+
+  async list(limit = 10): Promise<AssessmentResult[]> {
+    try {
+      return await request<AssessmentResult[]>(`/assessments?limit=${limit}`);
+    } catch {
+      return [];
     }
   },
 };

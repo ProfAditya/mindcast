@@ -44,6 +44,7 @@ export default function ChatScreen() {
   const [context, setContext] = useState<UserContext | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [assessmentData, setAssessmentData] = useState<AssessmentResult | null>(null);
+  const [assessmentHistory, setAssessmentHistory] = useState<AssessmentResult[]>([]);
   const [recentMoods, setRecentMoods] = useState<MoodEntry[]>([]);
   const [recentHabits, setRecentHabits] = useState<HabitLog[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -58,12 +59,13 @@ export default function ChatScreen() {
     const init = async () => {
       setLoadingHistory(true);
       try {
-        const [convResult, ctxResult, assessResult, moodResult, habitResult] = await Promise.allSettled([
+        const [convResult, ctxResult, assessResult, moodResult, habitResult, historyResult] = await Promise.allSettled([
           chatApi.getConversations(20),
           userContextApi.get(),
           assessmentsApi.getLatest(),
           moodApi.list(7),
           habitLogsApi.list(),
+          assessmentsApi.list(10),
         ]);
 
         if (convResult.status === 'fulfilled' && Array.isArray(convResult.value)) {
@@ -92,6 +94,13 @@ export default function ChatScreen() {
 
         if (habitResult.status === 'fulfilled' && Array.isArray(habitResult.value)) {
           setRecentHabits(habitResult.value);
+        }
+
+        if (historyResult.status === 'fulfilled' && Array.isArray(historyResult.value)) {
+          const sorted = [...historyResult.value].sort(
+            (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
+          );
+          setAssessmentHistory(sorted);
         }
       } finally {
         setLoadingHistory(false);
@@ -147,6 +156,7 @@ export default function ChatScreen() {
         },
         {
           assessmentData,
+          assessmentHistory,
           recentMoods,
           recentHabits,
         }

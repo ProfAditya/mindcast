@@ -9,9 +9,11 @@ import {
   moodApi,
   journalApi,
   getStoredUser,
+  assessmentsApi,
   type DashboardStats,
   type MoodEntry,
   type JournalEntry,
+  type AssessmentResult,
 } from '@/lib/api';
 import WellnessScoreCard from './WellnessScoreCard';
 import MoodTrendChart from './MoodTrendChart';
@@ -19,6 +21,7 @@ import HabitRingsCard from './HabitRingsCard';
 import MiraInsightCard from './MiraInsightCard';
 import RecentJournalCard from './RecentJournalCard';
 import StatsStripCard from './StatsStripCard';
+import AssessmentHistoryCard from './AssessmentHistoryCard';
 
 function useTimeOfDay() {
   const [timeData, setTimeData] = useState({ greeting: 'Hello', period: 'day' });
@@ -69,6 +72,8 @@ export default function DashboardContent() {
   const [recentJournal, setRecentJournal] = useState<JournalEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
+  const [assessmentHistory, setAssessmentHistory] = useState<AssessmentResult[]>([]);
+  const [assessmentLoading, setAssessmentLoading] = useState(true);
 
   useEffect(() => {
     const d = new Date();
@@ -111,7 +116,24 @@ export default function DashboardContent() {
       }
     }
 
+    async function fetchAssessmentHistory() {
+      try {
+        const history = await assessmentsApi.list(10);
+        if (!cancelled && Array.isArray(history)) {
+          const sorted = [...history].sort(
+            (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
+          );
+          setAssessmentHistory(sorted);
+        }
+      } catch {
+        // silently fail — card shows empty state
+      } finally {
+        if (!cancelled) setAssessmentLoading(false);
+      }
+    }
+
     fetchDashboardData();
+    fetchAssessmentHistory();
     return () => { cancelled = true; };
   }, []);
 
@@ -232,6 +254,11 @@ export default function DashboardContent() {
         {/* Stats Strip */}
         <motion.div variants={itemVariants} className="md:col-span-2 xl:col-span-4">
           <StatsStripCard stats={stats} />
+        </motion.div>
+
+        {/* Assessment History */}
+        <motion.div variants={itemVariants} className="md:col-span-2 xl:col-span-4">
+          <AssessmentHistoryCard history={assessmentHistory} loading={assessmentLoading} />
         </motion.div>
       </motion.div>
 
