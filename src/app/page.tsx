@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 
 // ─── Animated Background ────────────────────────────────────────────────────
@@ -993,10 +993,10 @@ function AnalyticsPreview() {
     setMounted(true);
   }, []);
 
-  const chartData = Array.from({ length: 30 }, (_, i) => ({
+  const chartData = React.useMemo(() => Array.from({ length: 30 }, (_, i) => ({
     mood: 50 + Math.sin(i * 0.4) * 25 + ((i * 7 + 3) % 15),
     energy: 45 + Math.cos(i * 0.3) * 20 + ((i * 11 + 5) % 15),
-  }));
+  })), []);
 
   return (
     <section className="py-28 px-6">
@@ -1020,6 +1020,7 @@ function AnalyticsPreview() {
             <div className="flex gap-2">
               {['7D','30D','90D'].map((p, i) => (
                 <button key={p} className="px-3 py-1 rounded-lg text-xs font-medium transition-colors"
+                  suppressHydrationWarning
                   style={i === 1 ? { background: 'rgba(124,58,237,0.2)', color: '#A78BFA' } : { color: 'rgba(255,255,255,0.3)' }}>
                   {p}
                 </button>
