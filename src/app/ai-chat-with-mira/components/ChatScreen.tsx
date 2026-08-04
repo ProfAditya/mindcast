@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Sparkles, AlertTriangle, X, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -35,10 +35,30 @@ const QUICK_PROMPTS = [
   { id: 'qp-05', text: "What patterns do you see in my data?", category: 'insights' },
 ];
 
+// Typing indicator component
+function TypingIndicator() {
+  return (
+    <div className="flex items-start gap-4 py-2 px-2 lg:px-8 xl:px-16 2xl:px-24">
+      <div className="w-7 h-7 rounded-full gradient-violet-rose flex items-center justify-center shrink-0 mt-1 elevation-xs">
+        <Sparkles size={12} strokeWidth={1.5} className="text-white" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium font-heading text-muted-foreground mb-2 uppercase tracking-wider">Mira</p>
+        <div className="flex items-center gap-1.5 py-2">
+          <span className="typing-dot w-2 h-2 rounded-full bg-primary/50" />
+          <span className="typing-dot w-2 h-2 rounded-full bg-primary/50" />
+          <span className="typing-dot w-2 h-2 rounded-full bg-primary/50" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [showTypingIndicator, setShowTypingIndicator] = useState(false);
   const [showContext, setShowContext] = useState(false);
   const [crisisDetected, setCrisisDetected] = useState(false);
   const [context, setContext] = useState<UserContext | null>(null);
@@ -49,10 +69,15 @@ export default function ChatScreen() {
   const [recentHabits, setRecentHabits] = useState<HabitLog[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const streamingIdRef = useRef<string | null>(null);
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, showTypingIndicator, scrollToBottom]);
 
   // Load conversation history and user context on mount
   useEffect(() => {
@@ -80,22 +105,10 @@ export default function ChatScreen() {
           );
         }
 
-        if (ctxResult.status === 'fulfilled') {
-          setContext(ctxResult.value);
-        }
-
-        if (assessResult.status === 'fulfilled' && assessResult.value) {
-          setAssessmentData(assessResult.value);
-        }
-
-        if (moodResult.status === 'fulfilled' && Array.isArray(moodResult.value)) {
-          setRecentMoods(moodResult.value.slice(0, 7));
-        }
-
-        if (habitResult.status === 'fulfilled' && Array.isArray(habitResult.value)) {
-          setRecentHabits(habitResult.value);
-        }
-
+        if (ctxResult.status === 'fulfilled') setContext(ctxResult.value);
+        if (assessResult.status === 'fulfilled' && assessResult.value) setAssessmentData(assessResult.value);
+        if (moodResult.status === 'fulfilled' && Array.isArray(moodResult.value)) setRecentMoods(moodResult.value.slice(0, 7));
+        if (habitResult.status === 'fulfilled' && Array.isArray(habitResult.value)) setRecentHabits(habitResult.value);
         if (historyResult.status === 'fulfilled' && Array.isArray(historyResult.value)) {
           const sorted = [...historyResult.value].sort(
             (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
@@ -126,33 +139,50 @@ export default function ChatScreen() {
       created_at: new Date().toISOString(),
     };
 
-    const streamingId = `msg-mira-${Date.now()}`;
-    const streamingMessage: Message = {
-      id: streamingId,
-      role: 'assistant',
-      content: '',
-      created_at: new Date().toISOString(),
-      isStreaming: true,
-    };
-
-    setMessages((prev) => [...prev, userMessage, streamingMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setIsStreaming(true);
+
+    // Show typing indicator briefly before streaming starts
+    setShowTypingIndicator(true);
+
+    const streamingId = `msg-mira-${Date.now()}`;
+    streamingIdRef.current = streamingId;
+
+    let streamingStarted = false;
 
     try {
       await chatApi.streamMessage(
         messageText,
         (chunk) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === streamingId ? { ...m, content: m.content + chunk } : m
-            )
-          );
+          if (!streamingStarted) {
+            streamingStarted = true;
+            setShowTypingIndicator(false);
+            // Add the streaming message now that we have content
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: streamingId,
+                role: 'assistant',
+                content: chunk,
+                created_at: new Date().toISOString(),
+                isStreaming: true,
+              },
+            ]);
+          } else {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === streamingId ? { ...m, content: m.content + chunk } : m
+              )
+            );
+          }
         },
         () => {
+          setShowTypingIndicator(false);
           setMessages((prev) =>
             prev.map((m) => m.id === streamingId ? { ...m, isStreaming: false } : m)
           );
           setIsStreaming(false);
+          streamingIdRef.current = null;
         },
         {
           assessmentData,
@@ -162,14 +192,25 @@ export default function ChatScreen() {
         }
       );
     } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === streamingId
-            ? { ...m, content: "I'm here with you. Something went a little sideways on my end — please try sending your message again. 💙", isStreaming: false }
-            : m
-        )
-      );
+      setShowTypingIndicator(false);
+      // Guaranteed warm fallback — never crashes
+      const fallbackMessage: Message = {
+        id: streamingId,
+        role: 'assistant',
+        content: "I hear you, and I'm here with you. Let's take a slow, deep breath together — in for 4 counts, hold for 4, out for 6. You're not alone in this. 💙",
+        created_at: new Date().toISOString(),
+        isStreaming: false,
+      };
+      setMessages((prev) => {
+        // Replace streaming message if it exists, otherwise add fallback
+        const hasStreaming = prev.some((m) => m.id === streamingId);
+        if (hasStreaming) {
+          return prev.map((m) => m.id === streamingId ? fallbackMessage : m);
+        }
+        return [...prev, fallbackMessage];
+      });
       setIsStreaming(false);
+      streamingIdRef.current = null;
     }
   };
 
@@ -180,22 +221,30 @@ export default function ChatScreen() {
     }
   };
 
+  // Auto-resize textarea
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    const ta = e.target;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 128) + 'px';
+  };
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden" data-testid="chat-screen">
+    <div className="flex h-[calc(100vh-60px)] overflow-hidden" data-testid="chat-screen">
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Chat Header */}
-        <div className="shrink-0 border-b border-border px-6 py-4 flex items-center justify-between bg-card/50 backdrop-blur-sm">
+        <div className="shrink-0 border-b border-border px-5 py-3.5 flex items-center justify-between glass-light dark:glass-dark">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="w-9 h-9 rounded-full gradient-violet-rose flex items-center justify-center">
-                <Sparkles size={16} strokeWidth={1.5} className="text-white" />
+              <div className="w-9 h-9 rounded-full gradient-violet-rose flex items-center justify-center elevation-sm">
+                <Sparkles size={15} strokeWidth={1.5} className="text-white" />
               </div>
               <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-background" />
             </div>
             <div>
-              <h2 className="font-heading font-semibold text-sm text-foreground">Mira</h2>
-              <p className="text-xs text-muted-foreground">Your wellness companion</p>
+              <h2 className="font-heading font-semibold text-[14px] text-foreground">Mira</h2>
+              <p className="text-[11px] text-muted-foreground">Your wellness companion · Always here</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -208,7 +257,7 @@ export default function ChatScreen() {
               )}
               data-testid="toggle-context-panel"
             >
-              <BarChart3 size={14} strokeWidth={1.5} />
+              <BarChart3 size={13} strokeWidth={1.5} />
               <span className="hidden sm:inline">Context</span>
             </button>
           </div>
@@ -218,77 +267,106 @@ export default function ChatScreen() {
         <AnimatePresence>
           {crisisDetected && (
             <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="mx-4 mt-3 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/40 p-4 flex items-start gap-3"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden shrink-0"
               data-testid="crisis-banner"
             >
-              <AlertTriangle size={16} strokeWidth={1.5} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 font-heading mb-1">
-                  If you&apos;re in crisis, please reach out
-                </p>
-                <p className="text-xs text-rose-600/80 dark:text-rose-400/80">
-                  988 Suicide & Crisis Lifeline — call or text <strong>988</strong>. Crisis Text Line — text HOME to <strong>741741</strong>.
-                </p>
+              <div className="mx-4 mt-3 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/40 p-4 flex items-start gap-3">
+                <AlertTriangle size={15} strokeWidth={1.5} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 font-heading mb-1">
+                    If you&apos;re in crisis, please reach out
+                  </p>
+                  <p className="text-xs text-rose-600/80 dark:text-rose-400/80">
+                    988 Suicide & Crisis Lifeline — call or text <strong>988</strong>. Crisis Text Line — text HOME to <strong>741741</strong>.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setCrisisDetected(false)}
+                  className="text-rose-400 hover:text-rose-600 transition-colors shrink-0"
+                  data-testid="dismiss-crisis-banner"
+                >
+                  <X size={14} strokeWidth={1.5} />
+                </button>
               </div>
-              <button
-                onClick={() => setCrisisDetected(false)}
-                className="text-rose-400 hover:text-rose-600 transition-colors"
-                data-testid="dismiss-crisis-banner"
-              >
-                <X size={14} strokeWidth={1.5} />
-              </button>
             </motion.div>
           )}
         </AnimatePresence>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin px-4 py-6 space-y-2">
+        <div className="flex-1 overflow-y-auto scrollbar-thin px-2 py-5 space-y-1">
+          {/* Loading skeleton */}
           {loadingHistory && (
-            <div className="flex justify-center py-8">
-              <span className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <div className="flex flex-col gap-4 px-4 py-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className={cn('flex gap-3', i % 2 === 0 && 'justify-end')}>
+                  {i % 2 !== 0 && <div className="w-7 h-7 rounded-full skeleton-shimmer shrink-0" />}
+                  <div className={cn('rounded-2xl skeleton-shimmer', i % 2 === 0 ? 'w-48 h-12' : 'w-64 h-16')} />
+                </div>
+              ))}
             </div>
           )}
+
+          {/* Empty state */}
           {!loadingHistory && messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center py-16">
-              <div className="w-16 h-16 rounded-full gradient-violet-rose flex items-center justify-center mb-4">
-                <Sparkles size={28} strokeWidth={1.5} className="text-white" />
+            <div className="flex flex-col items-center justify-center h-full text-center py-16 px-6">
+              <div className="w-16 h-16 rounded-2xl gradient-violet-rose flex items-center justify-center mb-5 elevation-md">
+                <Sparkles size={26} strokeWidth={1.5} className="text-white" />
               </div>
               <h3 className="font-heading font-semibold text-lg text-foreground mb-2">Hi, I&apos;m Mira</h3>
-              <p className="text-sm text-muted-foreground max-w-xs">
-                Your personal wellness companion. Share what&apos;s on your mind and I&apos;ll listen.
+              <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+                Your personal wellness companion. Share what&apos;s on your mind — I&apos;m here to listen and support you.
               </p>
             </div>
           )}
+
           <AnimatePresence initial={false}>
             {messages.map((message) => (
               <ChatMessage key={message.id} message={message} />
             ))}
           </AnimatePresence>
-          <div ref={messagesEndRef} />
+
+          {/* Typing indicator — shown before streaming starts */}
+          <AnimatePresence>
+            {showTypingIndicator && (
+              <motion.div
+                key="typing-indicator"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2 }}
+              >
+                <TypingIndicator />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div ref={messagesEndRef} className="h-1" />
         </div>
 
-        {/* Quick Prompts — only show when no messages and not streaming */}
+        {/* Quick Prompts */}
         {!isStreaming && messages.length === 0 && !loadingHistory && (
-          <div className="px-4 pb-2">
+          <div className="shrink-0 px-4 pb-2">
             <QuickPromptChips prompts={QUICK_PROMPTS} onSelect={handleSend} />
           </div>
         )}
 
         {/* Input Area */}
-        <div className="shrink-0 border-t border-border p-4">
-          <div className="flex items-end gap-3 rounded-2xl border border-border bg-card p-3 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 transition-all duration-200">
+        <div className="shrink-0 border-t border-border p-4 glass-light dark:glass-dark">
+          <div className="flex items-end gap-3 rounded-2xl border border-border bg-card/80 p-3 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/10 transition-all duration-200 elevation-xs">
             <textarea
               ref={inputRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Share what's on your mind..."
+              placeholder="Share what's on your mind…"
               rows={1}
-              className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none leading-relaxed max-h-32 scrollbar-thin"
-              style={{ minHeight: '24px' }}
+              disabled={isStreaming}
+              className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none leading-relaxed scrollbar-thin disabled:opacity-60"
+              style={{ minHeight: '24px', maxHeight: '128px' }}
               data-testid="chat-input"
             />
             <button
@@ -297,7 +375,7 @@ export default function ChatScreen() {
               className={cn(
                 'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-150',
                 input.trim() && !isStreaming
-                  ? 'gradient-violet-rose text-white hover:opacity-90 active:scale-95'
+                  ? 'gradient-violet-rose text-white hover:opacity-90 active:scale-95 elevation-sm'
                   : 'bg-muted text-muted-foreground cursor-not-allowed'
               )}
               data-testid="send-btn"
@@ -305,10 +383,13 @@ export default function ChatScreen() {
               {isStreaming ? (
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <Send size={15} strokeWidth={2} />
+                <Send size={14} strokeWidth={2} />
               )}
             </button>
           </div>
+          <p className="text-[10px] text-muted-foreground/60 text-center mt-2">
+            Mira is an AI wellness companion, not a licensed therapist.
+          </p>
         </div>
       </div>
 
