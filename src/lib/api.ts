@@ -355,7 +355,8 @@ export const chatApi = {
 
   /**
    * POST /api/chat — local Next.js route with LLM + fallback.
-   * Streams SSE: "data: {text: '...'}" / "data: {done: true}"
+   * Returns JSON: { reply: string }
+   * Simulates streaming client-side by delivering words in small chunks.
    */
   async streamMessage(
     message: string,
@@ -368,9 +369,12 @@ export const chatApi = {
       recentHabits?: Array<{ habit_type: string; value: number; unit?: string; completed?: boolean }>;
     }
   ): Promise<void> {
-    let res: Response;
+    const FALLBACK = "I hear you, and I'm here for you. Let's focus on taking a slow, deep breath together — inhale for four counts, hold for four, exhale for four. You're not alone in this moment. 💙";
+
+    let replyText = FALLBACK;
+
     try {
-      res = await fetch('/api/chat', {
+      let res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -381,51 +385,37 @@ export const chatApi = {
           recentHabits: context?.recentHabits ?? [],
         }),
       });
-    } catch {
-      // Network error — use a graceful fallback message via fake stream
-      onChunk("I'm here with you. It looks like there was a connection issue on my end. Please try again in a moment — I'm not going anywhere. 💙");
-      onDone();
-      return;
-    }
 
-    if (!res.ok || !res.body) {
-      onChunk("I'm here with you. Something went wrong on my end, but I don't want to leave you without support. Please try sending your message again. 💙");
-      onDone();
-      return;
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.done) {
-                onDone();
-                return;
-              }
-              if (parsed.text) onChunk(parsed.text);
-            } catch {
-              // non-JSON chunk — ignore
-            }
+      if (res.ok) {
+        try {
+          const data = await res.json();
+          const text = data?.reply;
+          if (typeof text === 'string' && text.trim().length > 0) {
+            replyText = text.trim();
           }
+        } catch {
+          // JSON parse failed — use fallback
         }
       }
     } catch {
-      // Stream read error — still call onDone to unblock UI
-    } finally {
-      onDone();
+      // Network error — use fallback
     }
+
+    // Simulate streaming by delivering words in small batches
+    try {
+      const words = replyText.split(' ');
+      const chunkSize = 4;
+      for (let i = 0; i < words.length; i += chunkSize) {
+        const slice = words.slice(i, i + chunkSize);
+        const chunk = slice.join(' ') + (i + chunkSize < words.length ? ' ' : '');
+        onChunk(chunk);
+        await new Promise<void>((resolve) => setTimeout(resolve, 30));
+      }
+    } catch {
+      onChunk(replyText);
+    }
+
+    onDone();
   },
 };
 
