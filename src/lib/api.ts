@@ -367,6 +367,7 @@ export const chatApi = {
       assessmentHistory?: AssessmentResult[];
       recentMoods?: Array<{ mood: string; energy_level?: number; stress_level?: number; created_at?: string }>;
       recentHabits?: Array<{ habit_type: string; value: number; unit?: string; completed?: boolean }>;
+      chatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
     }
   ): Promise<void> {
     const FALLBACK = "I hear you, and I'm here for you. Let's focus on taking a slow, deep breath together — inhale for four counts, hold for four, exhale for four. You're not alone in this moment. 💙";
@@ -383,6 +384,7 @@ export const chatApi = {
           assessmentHistory: context?.assessmentHistory ?? [],
           recentMoods: context?.recentMoods ?? [],
           recentHabits: context?.recentHabits ?? [],
+          chatHistory: context?.chatHistory ?? [],
         }),
       });
 

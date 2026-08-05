@@ -195,6 +195,7 @@ export default function ChatScreen() {
           assessmentHistory,
           recentMoods,
           recentHabits,
+          chatHistory: messages.filter((m) => !m.isStreaming).slice(-20),
         }
       );
     } catch {

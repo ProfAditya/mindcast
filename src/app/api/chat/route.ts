@@ -40,6 +40,10 @@ interface ChatRequestBody {
     unit?: string;
     completed?: boolean;
   }>;
+  chatHistory?: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+  }>;
 }
 
 // ─── Local Intelligence Engine ────────────────────────────────────────────────
@@ -178,11 +182,25 @@ function selectFromPool<T>(pool: T[], seed: string): T {
 // ─── Local Response Generator ─────────────────────────────────────────────────
 
 function generateLocalResponse(body: ChatRequestBody): string {
-  const { message, assessmentData, assessmentHistory, recentMoods } = body;
+  const { message, assessmentData, assessmentHistory, recentMoods, chatHistory } = body;
   const seed = message + (assessmentData?.overall_score ?? '') + new Date().getMinutes();
 
+  // Build a summary of what the user has already shared in this conversation
+  let conversationSummary = '';
+  if (chatHistory && chatHistory.length > 0) {
+    // Extract key facts the user has already mentioned so Mira never asks again
+    const recentUserMessages = chatHistory
+      .filter((m) => m.role === 'user')
+      .slice(-6)
+      .map((m) => m.content)
+      .join(' | ');
+    if (recentUserMessages.trim().length > 0) {
+      conversationSummary = `\n\n*Continuing our conversation — you've already shared: "${recentUserMessages.slice(0, 300)}${recentUserMessages.length > 300 ? '…' : ''}"*\n\n`;
+    }
+  }
+
   // Build context prefix
-  let contextPrefix = '';
+  let contextPrefix = conversationSummary;
 
   if (assessmentData?.overall_score != null) {
     const overall = assessmentData.overall_score;
@@ -269,7 +287,7 @@ function generateLocalResponse(body: ChatRequestBody): string {
 // ─── System Prompt Builder ────────────────────────────────────────────────────
 
 function buildSystemPrompt(body: ChatRequestBody): string {
-  const { assessmentData, assessmentHistory, recentMoods, recentHabits } = body;
+  const { assessmentData, assessmentHistory, recentMoods, recentHabits, chatHistory } = body;
   let ctx = '';
 
   if (assessmentData?.overall_score != null) {
@@ -311,7 +329,17 @@ function buildSystemPrompt(body: ChatRequestBody): string {
     if (completed.length > 0) ctx += `\n\nCompleted Habits: ${completed.join(', ')}`;
   }
 
-  return `You are Mira, a warm, empathetic AI wellness companion for MindCast. Respond with genuine care, warmth, and practical guidance. Keep responses to 2–4 paragraphs. Be specific and personal, never clinical or cold. Reference the user's wellness data naturally when helpful. Vary your tone and approach — never give the same type of response twice. Be deeply contextual and actionable.${ctx}`;
+  // Inject recent conversation history so Mira never asks users to repeat themselves
+  let conversationCtx = '';
+  if (chatHistory && chatHistory.length > 0) {
+    const recentTurns = chatHistory.slice(-20);
+    const formatted = recentTurns
+      .map((m) => `${m.role === 'user' ? 'User' : 'Mira'}: ${m.content.slice(0, 400)}${m.content.length > 400 ? '…' : ''}`)
+      .join('\n');
+    conversationCtx = `\n\nRecent Conversation History (use this to avoid asking the user to repeat anything they have already shared):\n${formatted}`;
+  }
+
+  return `You are Mira, a warm, empathetic AI wellness companion for MindCast. Respond with genuine care, warmth, and practical guidance. Keep responses to 2–4 paragraphs. Be specific and personal, never clinical or cold. Reference the user's wellness data naturally when helpful. Vary your tone and approach — never give the same type of response twice. Be deeply contextual and actionable. CRITICAL: Never ask the user to repeat or re-share information they have already provided in this conversation. Always read the conversation history above and build upon it.${ctx}${conversationCtx}`;
 }
 
 // ─── Fetch with Timeout ───────────────────────────────────────────────────────
@@ -329,10 +357,16 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
 
 // ─── LLM Providers ───────────────────────────────────────────────────────────
 
-async function tryOpenAI(systemPrompt: string, userMessage: string): Promise<string | null> {
+async function tryOpenAI(systemPrompt: string, userMessage: string, chatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<string | null> {
   try {
     const apiKey = process.env.OPENAI_API_KEY ?? '';
     if (!apiKey || apiKey.length < 20 || apiKey.startsWith('your-')) return null;
+
+    // Build multi-turn messages from history (last 10 turns) + current message
+    const historyMessages = (chatHistory ?? []).slice(-10).map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
 
     const res = await fetchWithTimeout(
       'https://api.openai.com/v1/chat/completions',
@@ -343,6 +377,7 @@ async function tryOpenAI(systemPrompt: string, userMessage: string): Promise<str
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
+            ...historyMessages,
             { role: 'user', content: userMessage },
           ],
           max_tokens: 600,
@@ -361,10 +396,16 @@ async function tryOpenAI(systemPrompt: string, userMessage: string): Promise<str
   }
 }
 
-async function tryGemini(systemPrompt: string, userMessage: string): Promise<string | null> {
+async function tryGemini(systemPrompt: string, userMessage: string, chatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<string | null> {
   try {
     const apiKey = process.env.GEMINI_API_KEY ?? '';
     if (!apiKey || apiKey.length < 20 || apiKey.startsWith('your-')) return null;
+
+    // Build multi-turn contents from history (last 10 turns) + current message
+    const historyContents = (chatHistory ?? []).slice(-10).map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
 
     const res = await fetchWithTimeout(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -373,7 +414,10 @@ async function tryGemini(systemPrompt: string, userMessage: string): Promise<str
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+          contents: [
+            ...historyContents,
+            { role: 'user', parts: [{ text: userMessage }] },
+          ],
           generationConfig: { maxOutputTokens: 600, temperature: 0.85 },
         }),
       },
@@ -389,10 +433,16 @@ async function tryGemini(systemPrompt: string, userMessage: string): Promise<str
   }
 }
 
-async function tryAnthropic(systemPrompt: string, userMessage: string): Promise<string | null> {
+async function tryAnthropic(systemPrompt: string, userMessage: string, chatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<string | null> {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY ?? '';
     if (!apiKey || apiKey.length < 20 || apiKey.startsWith('your-')) return null;
+
+    // Build multi-turn messages from history (last 10 turns) + current message
+    const historyMessages = (chatHistory ?? []).slice(-10).map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
 
     const res = await fetchWithTimeout(
       'https://api.anthropic.com/v1/messages',
@@ -407,7 +457,10 @@ async function tryAnthropic(systemPrompt: string, userMessage: string): Promise<
           model: 'claude-3-haiku-20240307',
           max_tokens: 600,
           system: systemPrompt,
-          messages: [{ role: 'user', content: userMessage }],
+          messages: [
+            ...historyMessages,
+            { role: 'user', content: userMessage },
+          ],
         }),
       },
       12000
@@ -443,12 +496,13 @@ export async function POST(req: NextRequest) {
     }
 
     const systemPrompt = buildSystemPrompt(body);
+    const chatHistory = body.chatHistory ?? [];
 
-    // Try LLM providers first
+    // Try LLM providers first (with full multi-turn history)
     let reply: string | null = null;
-    reply = await tryOpenAI(systemPrompt, message);
-    if (!reply) reply = await tryGemini(systemPrompt, message);
-    if (!reply) reply = await tryAnthropic(systemPrompt, message);
+    reply = await tryOpenAI(systemPrompt, message, chatHistory);
+    if (!reply) reply = await tryGemini(systemPrompt, message, chatHistory);
+    if (!reply) reply = await tryAnthropic(systemPrompt, message, chatHistory);
 
     // Fall back to rich local intelligence engine
     if (!reply || reply.trim().length === 0) {
