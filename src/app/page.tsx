@@ -1,1063 +1,1225 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect } from 'react';
 
-// ─── Global Styles ────────────────────────────────────────────────────────────
 const globalStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 
-  :root {
-    --obsidian: #0a0a0c;
-    --s1: #111115;
-    --s2: #18181e;
-    --s3: #1f1f28;
-    --violet: #7c3aed;
-    --violet-l: #a78bfa;
-    --indigo: #4f46e5;
-    --indigo-l: #818cf8;
-    --neon: #8b5cf6;
-    --border-s: rgba(255,255,255,0.06);
-    --border-m: rgba(255,255,255,0.10);
-    --tp: #f8f8ff;
-    --ts: rgba(248,248,255,0.55);
-    --tm: rgba(248,248,255,0.30);
+  .mc-root {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: #0a0a0c;
+    min-height: 100vh;
+    color: #f5f5f5;
   }
+  .mc-root * { font-family: 'Plus Jakarta Sans', sans-serif !important; box-sizing: border-box; }
 
-  .mc-root * { font-family: 'Plus Jakarta Sans', sans-serif !important; }
-
-  @keyframes orb1 {
-    0%,100%{transform:translate(0,0) scale(1);}
-    40%{transform:translate(60px,80px) scale(1.12);}
-    70%{transform:translate(-30px,40px) scale(0.94);}
+  @keyframes ping-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.6); }
   }
-  @keyframes orb2 {
-    0%,100%{transform:translate(0,0) scale(1);}
-    35%{transform:translate(-80px,50px) scale(1.08);}
-    65%{transform:translate(50px,-70px) scale(1.04);}
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
-  @keyframes orb3 {
-    0%,100%{transform:translate(0,0) scale(1);}
-    50%{transform:translate(70px,-60px) scale(1.1);}
-  }
-  @keyframes grad-text {
-    0%,100%{background-position:0% 50%;}
-    50%{background-position:100% 50%;}
-  }
-  @keyframes float-card {
-    0%,100%{transform:translateY(0px) rotate(-0.8deg);}
-    50%{transform:translateY(-14px) rotate(-0.8deg);}
-  }
-  @keyframes glow-pulse {
-    0%,100%{box-shadow:0 0 20px rgba(124,58,237,0.3);}
-    50%{box-shadow:0 0 40px rgba(124,58,237,0.65), 0 0 80px rgba(124,58,237,0.2);}
-  }
-  @keyframes fade-up {
-    from{opacity:0;transform:translateY(28px);}
-    to{opacity:1;transform:translateY(0);}
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   @keyframes fade-in {
-    from{opacity:0;}
-    to{opacity:1;}
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
-  @keyframes waveform {
-    0%,100%{transform:scaleY(0.4);}
-    50%{transform:scaleY(1);}
-  }
-  @keyframes spin-slow {
-    from{transform:rotate(0deg);}
-    to{transform:rotate(360deg);}
-  }
-  @keyframes progress-fill {
-    from{width:0%;}
-    to{width:62%;}
-  }
-  @keyframes ticker-scroll {
-    0%{transform:translateX(0);}
-    100%{transform:translateX(-50%);}
+  @keyframes orb-float {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(30px, 40px) scale(1.08); }
   }
 
-  .animate-fade-up { animation: fade-up 0.7s cubic-bezier(0.22,1,0.36,1) both; }
-  .animate-fade-in { animation: fade-in 0.5s ease both; }
-  .delay-100{animation-delay:0.1s;} .delay-200{animation-delay:0.2s;}
-  .delay-300{animation-delay:0.3s;} .delay-400{animation-delay:0.4s;}
-  .delay-500{animation-delay:0.5s;} .delay-600{animation-delay:0.6s;}
+  .mc-animate-in { animation: fade-in-up 0.5s cubic-bezier(0.22,1,0.36,1) both; }
+  .mc-animate-fade { animation: fade-in 0.4s ease both; }
+  .mc-ping { animation: ping-dot 1.4s ease-in-out infinite; }
+  .mc-spin { animation: spin 0.9s linear infinite; }
+  .mc-orb { animation: orb-float 18s ease-in-out infinite; }
 
-  .gradient-text {
-    background: linear-gradient(135deg, #a78bfa 0%, #818cf8 40%, #c4b5fd 80%, #a78bfa 100%);
-    background-size: 200% 200%;
+  .mc-glass-nav {
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    background: rgba(10,10,12,0.82);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .mc-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .mc-card:hover {
+    border-color: rgba(255,255,255,0.12);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  }
+  .mc-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(99,102,241,0.05), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .mc-card:hover::before { opacity: 1; }
+
+  .mc-btn-primary {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+    transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .mc-btn-primary:hover:not(:disabled) {
+    opacity: 0.95;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 30px rgba(99,102,241,0.45);
+  }
+  .mc-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .mc-btn-ghost {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+  .mc-btn-ghost:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(255,255,255,0.18);
+  }
+
+  .mc-select {
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #f5f5f5;
+    transition: border-color 0.2s ease;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .mc-select:focus {
+    outline: none;
+    border-color: rgba(99,102,241,0.5);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+  }
+
+  .mc-textarea {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #f5f5f5;
+    transition: border-color 0.2s ease;
+    resize: none;
+  }
+  .mc-textarea:focus {
+    outline: none;
+    border-color: rgba(99,102,241,0.5);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+  }
+  .mc-textarea::placeholder { color: rgba(255,255,255,0.2); }
+
+  .mc-result-card {
+    animation: fade-in-up 0.5s cubic-bezier(0.22,1,0.36,1) both;
+  }
+
+  .mc-gradient-text {
+    background: linear-gradient(135deg, #818cf8 0%, #c4b5fd 50%, #ffffff 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    animation: grad-text 5s ease infinite;
   }
 
-  .btn-primary {
-    background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
-    box-shadow: 0 4px 20px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.1);
-    transition: all 0.25s cubic-bezier(0.22,1,0.36,1);
-    position: relative; overflow: hidden;
-  }
-  .btn-primary::before {
-    content:''; position:absolute; inset:0;
-    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-    opacity:0; transition:opacity 0.25s ease;
-  }
-  .btn-primary:hover::before{opacity:1;}
-  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(124,58,237,0.5),inset 0 1px 0 rgba(255,255,255,0.15);}
-  .btn-primary:active{transform:translateY(0);}
-  .btn-primary span{position:relative;z-index:1;}
-
-  .btn-ghost {
-    border:1px solid rgba(255,255,255,0.10);
-    transition:all 0.25s cubic-bezier(0.22,1,0.36,1);
-    background:rgba(255,255,255,0.03);
-  }
-  .btn-ghost:hover{border-color:rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);transform:translateY(-1px);}
-
-  .glass-nav {
-    backdrop-filter:blur(24px) saturate(180%);
-    -webkit-backdrop-filter:blur(24px) saturate(180%);
-    background:rgba(10,10,12,0.78);
-    border-bottom:1px solid rgba(255,255,255,0.06);
+  .mc-view-enter {
+    animation: fade-in-up 0.4s cubic-bezier(0.22,1,0.36,1) both;
   }
 
-  .bento-card {
-    background:var(--s1);
-    border:1px solid var(--border-s);
-    transition:all 0.3s cubic-bezier(0.22,1,0.36,1);
-    position:relative; overflow:hidden;
-  }
-  .bento-card::before {
-    content:''; position:absolute; inset:0;
-    background:linear-gradient(135deg,rgba(124,58,237,0.04) 0%,transparent 60%);
-    opacity:0; transition:opacity 0.3s ease;
-  }
-  .bento-card:hover{border-color:rgba(124,58,237,0.28);transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,0.4),0 0 0 1px rgba(124,58,237,0.12);}
-  .bento-card:hover::before{opacity:1;}
-
-  .bento-accent {
-    background:linear-gradient(135deg,rgba(124,58,237,0.08) 0%,rgba(79,70,229,0.05) 100%);
-    border:1px solid rgba(124,58,237,0.18);
-    transition:all 0.3s cubic-bezier(0.22,1,0.36,1);
-    position:relative; overflow:hidden;
-  }
-  .bento-accent:hover{border-color:rgba(124,58,237,0.4);transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,0.4),0 0 30px rgba(124,58,237,0.15);}
-
-  .scroll-reveal {
-    opacity:0; transform:translateY(24px);
-    transition:opacity 0.7s cubic-bezier(0.22,1,0.36,1),transform 0.7s cubic-bezier(0.22,1,0.36,1);
-  }
-  .scroll-reveal.visible{opacity:1;transform:translateY(0);}
-  .sr-d1{transition-delay:0.1s;} .sr-d2{transition-delay:0.2s;}
-  .sr-d3{transition-delay:0.3s;} .sr-d4{transition-delay:0.4s;}
-  .sr-d5{transition-delay:0.5s;}
-
-  .noise-overlay {
-    position:fixed; inset:0; pointer-events:none; z-index:1; opacity:0.022;
-    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  .mc-progress-bar {
+    background: linear-gradient(90deg, #4f46e5, #7c3aed);
+    width: 33%;
+    height: 100%;
+    border-radius: 9999px;
   }
 
-  .waveform-bar {
-    width: 3px;
-    border-radius: 2px;
-    background: linear-gradient(180deg, #a78bfa, #4f46e5);
-    transform-origin: center bottom;
-  }
-  .waveform-bar.playing {
-    animation: waveform 0.8s ease-in-out infinite;
-  }
-
-  .audio-progress {
-    animation: progress-fill 2.5s cubic-bezier(0.22,1,0.36,1) forwards;
-  }
-
-  .studio-input:focus {
-    outline: none;
-    border-color: rgba(124,58,237,0.45) !important;
-    box-shadow: 0 0 0 3px rgba(124,58,237,0.1);
-  }
-
-  .view-toggle-btn {
-    transition: all 0.2s cubic-bezier(0.22,1,0.36,1);
-  }
-  .view-toggle-btn.active {
-    background: rgba(124,58,237,0.15);
-    border-color: rgba(124,58,237,0.3) !important;
-    color: #a78bfa;
-  }
-  .view-toggle-btn:not(.active) {
-    color: rgba(248,248,255,0.4);
-  }
-  .view-toggle-btn:not(.active):hover {
-    background: rgba(255,255,255,0.04);
-    color: rgba(248,248,255,0.7);
-  }
+  .mc-scrollbar::-webkit-scrollbar { width: 4px; }
+  .mc-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .mc-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 `;
 
-// ─── Scroll Reveal Hook ───────────────────────────────────────────────────────
-function useScrollReveal() {
-  useEffect(() => {
-    const els = document.querySelectorAll('.scroll-reveal');
-    const observer = new IntersectionObserver(
-      (entries) => entries.forEach((e) => { if (e.isIntersecting) e.target.classList.add('visible'); }),
-      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
-    );
-    els.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
+interface EpisodeResult {
+  title: string;
+  duration: string;
+  host: string;
+  summary: string;
+  transcript: { speaker: string; text: string }[];
 }
 
-// ─── Background ───────────────────────────────────────────────────────────────
-function Background() {
-  return (
-    <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-      <div className="absolute inset-0" style={{ background: '#0a0a0c' }} />
-      <div className="absolute -top-32 -left-32 w-[640px] h-[640px] rounded-full"
-        style={{ background: 'radial-gradient(circle,rgba(124,58,237,0.16) 0%,transparent 70%)', animation: 'orb1 22s ease-in-out infinite' }} />
-      <div className="absolute top-1/2 -right-48 w-[560px] h-[560px] rounded-full"
-        style={{ background: 'radial-gradient(circle,rgba(79,70,229,0.10) 0%,transparent 70%)', animation: 'orb2 28s ease-in-out infinite' }} />
-      <div className="absolute -bottom-20 left-1/4 w-[480px] h-[480px] rounded-full"
-        style={{ background: 'radial-gradient(circle,rgba(139,92,246,0.07) 0%,transparent 70%)', animation: 'orb3 34s ease-in-out infinite' }} />
-      <div className="absolute inset-0"
-        style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.016) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.016) 1px,transparent 1px)', backgroundSize: '72px 72px' }} />
-      <div className="noise-overlay" />
-    </div>
-  );
-}
+export default function MindCastUltimateApp() {
+  const [currentView, setCurrentView] = useState<'landing' | 'studio'>('landing');
+  const [inputTopic, setInputTopic] = useState('');
+  const [selectedVoice, setSelectedVoice] = useState('Aria & Marcus (Dynamic Duo)');
+  const [selectedDepth, setSelectedDepth] = useState('Deep Dive (8-10 min)');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [episodeResult, setEpisodeResult] = useState<EpisodeResult | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [viewKey, setViewKey] = useState(0);
 
-// ─── Navbar ───────────────────────────────────────────────────────────────────
-function Navbar({ view, setView }: { view: 'landing' | 'studio'; setView: (v: 'landing' | 'studio') => void }) {
-  const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const processingSteps = [
+    'Ingesting text parameters & analyzing context...',
+    'Synthesizing dual-host conversational dynamics...',
+    'Applying professional studio mastering & spatial audio...',
+    'Compiling final high-fidelity master stream...',
+  ];
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 32);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+    let timer: ReturnType<typeof setTimeout>;
+    if (isProcessing) {
+      if (stepIndex < processingSteps.length - 1) {
+        timer = setTimeout(() => setStepIndex((prev) => prev + 1), 900);
+      } else {
+        timer = setTimeout(() => {
+          setIsProcessing(false);
+          setEpisodeResult({
+            title: inputTopic.trim()
+              ? `Deep Dive: ${inputTopic}`
+              : 'The Architecture of Autonomous Intelligence',
+            duration: selectedDepth.includes('Deep') ? '08:45' : selectedDepth.includes('Quick') ? '04:20' : '01:30',
+            host: selectedVoice,
+            summary:
+              'An elite synthetic audio breakdown tailored with multi-speaker neural dynamics, natural cadence variance, and studio-grade mastering.',
+            transcript: [
+              {
+                speaker: 'Host 1 (Aria)',
+                text: 'Welcome back to MindCast. Today we are breaking down the exact core parameters of what you just fed into our system.',
+              },
+              {
+                speaker: 'Host 2 (Marcus)',
+                text: 'That is right. The implications here shift everything we know about instant audio synthesis and high-speed cognitive structuring.',
+              },
+              {
+                speaker: 'Host 1 (Aria)',
+                text: "Let's unpack the primary layer and look at how this impacts the overall ecosystem moving forward.",
+              },
+            ],
+          });
+        }, 1200);
+      }
+    }
+    return () => clearTimeout(timer);
+  }, [isProcessing, stepIndex]);
+
+  const handleGenerateEpisode = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsProcessing(true);
+    setStepIndex(0);
+    setEpisodeResult(null);
+    setIsPlaying(false);
+  };
+
+  const switchView = (view: 'landing' | 'studio') => {
+    setCurrentView(view);
+    setViewKey((k) => k + 1);
+  };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 transition-all duration-500">
-      <div className={`transition-all duration-500 ${scrolled ? 'glass-nav' : ''}`}>
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between gap-4">
-          {/* Logo */}
-          <button onClick={() => setView('landing')} className="flex items-center gap-2.5 group flex-shrink-0">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg,#7c3aed 0%,#4f46e5 100%)', boxShadow: '0 4px 12px rgba(124,58,237,0.4)' }}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2a3 3 0 00-3 3v1.5l-1 2.5h8l-1-2.5V5a3 3 0 00-3-3z" fill="white" opacity="0.95" />
-                <path d="M5.5 9.5c0 1.4 1.1 2.5 2.5 2.5s2.5-1.1 2.5-2.5" stroke="white" strokeWidth="1.2" fill="none" opacity="0.6" />
-                <line x1="8" y1="12" x2="8" y2="14" stroke="white" strokeWidth="1.4" strokeLinecap="round" opacity="0.5" />
-              </svg>
-            </div>
-            <span className="font-bold text-[17px]" style={{ color: '#f8f8ff', letterSpacing: '-0.02em' }}>MindCast</span>
-          </button>
+    <>
+      <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
+      <div className="mc-root" style={{ overflowX: 'hidden' }}>
+        {/* Background orbs */}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+          <div
+            className="mc-orb"
+            style={{
+              position: 'absolute',
+              top: '-8rem',
+              left: '-8rem',
+              width: '600px',
+              height: '600px',
+              borderRadius: '9999px',
+              background: 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '-4rem',
+              right: '-6rem',
+              width: '500px',
+              height: '500px',
+              borderRadius: '9999px',
+              background: 'radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 70%)',
+              animation: 'orb-float 24s ease-in-out infinite reverse',
+            }}
+          />
+        </div>
 
-          {/* View Toggle — desktop */}
-          <div className="hidden md:flex items-center gap-1 p-1 rounded-full"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-            {(['landing', 'studio'] as const).map((v) => (
-              <button key={v} onClick={() => setView(v)}
-                className={`view-toggle-btn px-4 py-1.5 rounded-full text-xs font-semibold border border-transparent ${view === v ? 'active' : ''}`}>
-                {v === 'landing' ? 'Overview' : '✦ App Studio'}
-              </button>
-            ))}
-          </div>
-
-          {/* CTA */}
-          <div className="hidden md:flex items-center gap-3">
-            <Link href="/sign-up-login-screen"
-              className="px-4 py-2 text-[13px] font-medium transition-colors duration-200"
-              style={{ color: 'rgba(248,248,255,0.45)' }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = '#f8f8ff')}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'rgba(248,248,255,0.45)')}>
-              Sign in
-            </Link>
-            <button onClick={() => setView('studio')}
-              className="btn-primary px-5 py-2.5 rounded-full text-[13px] font-semibold text-white">
-              <span>Launch App</span>
+        {/* ── NAVBAR ── */}
+        <nav
+          className="mc-glass-nav"
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 50,
+            padding: '0 1.5rem',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '80rem',
+              margin: '0 auto',
+              height: '64px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1rem',
+            }}
+          >
+            {/* Logo */}
+            <button
+              onClick={() => switchView('landing')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                cursor: 'pointer',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #818cf8)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
+                  color: '#fff',
+                  fontSize: '15px',
+                  boxShadow: '0 4px 16px rgba(99,102,241,0.35)',
+                  transition: 'transform 0.2s ease',
+                }}
+              >
+                M
+              </div>
+              <span style={{ fontWeight: 600, fontSize: '17px', color: '#fff', letterSpacing: '-0.02em' }}>
+                MindCast
+              </span>
             </button>
-          </div>
 
-          {/* Mobile toggle */}
-          <button suppressHydrationWarning className="md:hidden p-2 rounded-lg"
-            style={{ color: 'rgba(248,248,255,0.6)' }} onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              {menuOpen
-                ? <path d="M4 4l12 12M16 4L4 16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                : <path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />}
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile menu */}
-      {menuOpen && (
-        <div className="md:hidden" style={{ background: 'rgba(10,10,12,0.96)', backdropFilter: 'blur(24px)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="px-5 py-4 flex flex-col gap-2">
-            {(['landing', 'studio'] as const).map((v) => (
-              <button key={v} onClick={() => { setView(v); setMenuOpen(false); }}
-                className="px-4 py-3 text-sm font-medium rounded-xl text-left transition-colors"
-                style={{ color: view === v ? '#a78bfa' : 'rgba(248,248,255,0.55)', background: view === v ? 'rgba(124,58,237,0.1)' : 'transparent' }}>
-                {v === 'landing' ? 'Overview' : '✦ App Studio'}
+            {/* Center links */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '2rem',
+                fontSize: '13px',
+                color: 'rgba(255,255,255,0.45)',
+                fontWeight: 500,
+              }}
+              className="hidden-mobile"
+            >
+              <button
+                onClick={() => switchView('landing')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'inherit',
+                  fontSize: 'inherit',
+                  fontWeight: 'inherit',
+                  transition: 'color 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.45)')}
+              >
+                Overview
               </button>
-            ))}
-            <div className="mt-2 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-              <button onClick={() => { setView('studio'); setMenuOpen(false); }}
-                className="btn-primary w-full px-4 py-3.5 rounded-xl text-sm font-semibold text-white text-center">
-                <span>Launch App</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </nav>
-  );
-}
-
-// ─── Hero Section ─────────────────────────────────────────────────────────────
-function HeroSection({ onLaunch }: { onLaunch: () => void }) {
-  return (
-    <section className="relative min-h-screen flex items-center justify-center px-5 sm:px-8 pt-24 pb-16 overflow-hidden">
-      <div className="max-w-6xl mx-auto w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          {/* Left */}
-          <div>
-            <div className="animate-fade-up inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold mb-8"
-              style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.22)', color: '#a78bfa' }}>
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#a78bfa', boxShadow: '0 0 6px rgba(167,139,250,0.8)', animation: 'glow-pulse 2s ease-in-out infinite' }} />
-              AI Audio Generation · Instant Deep-Dives
-            </div>
-
-            <h1 className="animate-fade-up delay-100 font-bold leading-[1.04] mb-6"
-              style={{ fontSize: 'clamp(2.6rem,5.5vw,4.8rem)', letterSpacing: '-0.04em', color: '#f8f8ff' }}>
-              Turn any text<br className="hidden sm:block" />
-              <span className="gradient-text">into a podcast.</span>
-            </h1>
-
-            <p className="animate-fade-up delay-200 leading-relaxed mb-10 max-w-lg"
-              style={{ fontSize: 'clamp(1rem,1.8vw,1.15rem)', color: 'rgba(248,248,255,0.5)', lineHeight: '1.75' }}>
-              Paste an article, research paper, or any topic — MindCast&apos;s AI transforms it into a rich, narrated audio deep-dive in seconds. Knowledge, on demand, in your ears.
-            </p>
-
-            <div className="animate-fade-up delay-300 flex flex-wrap items-center gap-3 mb-12">
-              <button onClick={onLaunch}
-                className="btn-primary group flex items-center gap-2.5 px-7 py-3.5 rounded-full font-semibold text-white text-sm">
-                <span>Launch App</span>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="relative z-10 transition-transform duration-200 group-hover:translate-x-0.5">
-                  <path d="M2.5 7h9M7.5 3.5l3.5 3.5-3.5 3.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <a href="#features"
-                className="btn-ghost flex items-center gap-2.5 px-7 py-3.5 rounded-full font-semibold text-sm"
-                style={{ color: 'rgba(248,248,255,0.7)' }}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.4" />
-                  <path d="M5.5 4.5l4 2.5-4 2.5V4.5z" fill="currentColor" />
-                </svg>
-                See how it works
+              <a
+                href="#features"
+                style={{ color: 'inherit', textDecoration: 'none', transition: 'color 0.2s' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.45)')}
+              >
+                Architecture
+              </a>
+              <a
+                href="#features"
+                style={{ color: 'inherit', textDecoration: 'none', transition: 'color 0.2s' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.45)')}
+              >
+                Technology
               </a>
             </div>
 
-            <div className="animate-fade-up delay-400 flex items-center gap-5 flex-wrap">
-              {['No account needed to try', 'Instant generation', 'Export-ready audio'].map((item, i) => (
-                <div key={i} className="flex items-center gap-1.5 text-xs" style={{ color: 'rgba(248,248,255,0.32)' }}>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6l2.5 2.5L10 3" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Right: floating audio card */}
-          <div className="animate-fade-up delay-500 relative flex items-center justify-center">
-            <div className="absolute inset-8 rounded-3xl blur-3xl"
-              style={{ background: 'radial-gradient(ellipse,rgba(124,58,237,0.22) 0%,transparent 70%)' }} />
-
-            <div className="relative w-full max-w-sm" style={{ animation: 'float-card 6s ease-in-out infinite' }}>
-              <div className="rounded-2xl overflow-hidden"
-                style={{ background: 'rgba(17,17,21,0.88)', border: '1px solid rgba(124,58,237,0.2)', backdropFilter: 'blur(24px)', boxShadow: '0 32px 80px rgba(0,0,0,0.6),0 0 0 1px rgba(124,58,237,0.08)' }}>
-                {/* Card header */}
-                <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                      style={{ background: 'linear-gradient(135deg,#7c3aed,#4f46e5)' }}>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path d="M7 1a3 3 0 00-3 3v1l-.8 2h7.6L10 5V4a3 3 0 00-3-3z" fill="white" opacity="0.9" />
-                        <path d="M4.5 7c0 1.4 1.1 2.5 2.5 2.5S9.5 8.4 9.5 7" stroke="white" strokeWidth="1.1" fill="none" opacity="0.6" />
-                        <line x1="7" y1="9.5" x2="7" y2="11" stroke="white" strokeWidth="1.2" strokeLinecap="round" opacity="0.5" />
-                      </svg>
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold" style={{ color: '#f8f8ff' }}>MindCast AI</div>
-                      <div className="text-[10px]" style={{ color: 'rgba(248,248,255,0.35)' }}>Generating audio…</div>
-                    </div>
-                  </div>
-                  <div className="px-2.5 py-1 rounded-full text-[10px] font-semibold"
-                    style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
-                    12 min
-                  </div>
-                </div>
-
-                {/* Waveform preview */}
-                <div className="px-5 py-5">
-                  <div className="text-xs font-semibold mb-1" style={{ color: '#f8f8ff' }}>The Science of Deep Work</div>
-                  <div className="text-[10px] mb-4" style={{ color: 'rgba(248,248,255,0.38)' }}>AI Deep-Dive · 12 min · Generated just now</div>
-                  <div className="flex items-end gap-[3px] h-10 mb-4">
-                    {Array.from({ length: 38 }).map((_, i) => {
-                      const heights = [30,55,40,70,45,85,60,35,75,50,90,40,65,30,80,55,45,70,35,60,85,40,55,75,30,65,50,80,40,70,55,35,90,45,60,75,40,55];
-                      const h = heights[i % heights.length];
-                      const isPlayed = i < 14;
-                      return (
-                        <div key={i} className={`waveform-bar ${i >= 12 && i <= 16 ? 'playing' : ''}`}
-                          style={{ height: `${h}%`, background: isPlayed ? 'linear-gradient(180deg,#a78bfa,#4f46e5)' : 'rgba(255,255,255,0.1)', animationDelay: `${(i % 5) * 0.15}s` }} />
-                      );
-                    })}
-                  </div>
-                  {/* Progress bar */}
-                  <div className="h-0.5 rounded-full mb-2 overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                    <div className="h-full rounded-full" style={{ width: '38%', background: 'linear-gradient(90deg,#7c3aed,#4f46e5)' }} />
-                  </div>
-                  <div className="flex justify-between text-[10px]" style={{ color: 'rgba(248,248,255,0.3)' }}>
-                    <span>4:32</span><span>12:05</span>
-                  </div>
-                </div>
-
-                {/* Controls */}
-                <div className="flex items-center justify-center gap-5 px-5 pb-5">
-                  <button className="w-8 h-8 flex items-center justify-center rounded-full transition-colors"
-                    style={{ color: 'rgba(248,248,255,0.4)' }}>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M12 3L5 8l7 5V3z" fill="currentColor" opacity="0.7" />
-                      <line x1="3" y1="3" x2="3" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
-                    </svg>
-                  </button>
-                  <button className="w-11 h-11 flex items-center justify-center rounded-full"
-                    style={{ background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', boxShadow: '0 4px 16px rgba(124,58,237,0.45)' }}>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <rect x="4" y="3" width="3" height="10" rx="1" fill="white" />
-                      <rect x="9" y="3" width="3" height="10" rx="1" fill="white" />
-                    </svg>
-                  </button>
-                  <button className="w-8 h-8 flex items-center justify-center rounded-full transition-colors"
-                    style={{ color: 'rgba(248,248,255,0.4)' }}>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M4 3l7 5-7 5V3z" fill="currentColor" opacity="0.7" />
-                      <line x1="13" y1="3" x2="13" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Floating chips */}
-              <div className="absolute -top-4 -right-4 px-3 py-1.5 rounded-full text-[10px] font-semibold"
-                style={{ background: 'rgba(17,17,21,0.92)', border: '1px solid rgba(124,58,237,0.3)', color: '#a78bfa', backdropFilter: 'blur(12px)', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}>
-                ✦ AI Generated
-              </div>
-              <div className="absolute -bottom-4 -left-4 px-3 py-1.5 rounded-full text-[10px] font-semibold"
-                style={{ background: 'rgba(17,17,21,0.92)', border: '1px solid rgba(79,70,229,0.3)', color: '#818cf8', backdropFilter: 'blur(12px)', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}>
-                Ready in &lt;10s ⚡
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Ticker ───────────────────────────────────────────────────────────────────
-function Ticker() {
-  const items = ['AI Narration', 'Deep-Dive Audio', 'Research Summaries', 'Instant Podcasts', 'Text to Speech', 'Topic Exploration', 'Export MP3', 'Smart Chapters', 'Voice Synthesis', 'Knowledge Audio'];
-  const doubled = [...items, ...items];
-  return (
-    <div className="py-4 overflow-hidden"
-      style={{ borderTop: '1px solid rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.04)', background: 'rgba(255,255,255,0.01)' }}>
-      <div className="flex gap-10 whitespace-nowrap" style={{ animation: 'ticker-scroll 30s linear infinite' }}>
-        {doubled.map((item, i) => (
-          <span key={i} className="flex items-center gap-3 text-[11px] font-medium tracking-wide" style={{ color: 'rgba(248,248,255,0.22)' }}>
-            <span className="w-1 h-1 rounded-full inline-block" style={{ background: 'rgba(124,58,237,0.5)' }} />
-            {item}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Features Bento Grid ──────────────────────────────────────────────────────
-function FeaturesSection() {
-  useScrollReveal();
-
-  return (
-    <section id="features" className="py-28 px-5 sm:px-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="scroll-reveal mb-16 max-w-xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-5"
-            style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.18)', color: '#a78bfa' }}>
-            Core Capabilities
-          </div>
-          <h2 className="font-bold mb-4"
-            style={{ fontSize: 'clamp(2rem,4vw,3rem)', letterSpacing: '-0.038em', color: '#f8f8ff', lineHeight: 1.08 }}>
-            From raw text to rich audio,<br />in one step.
-          </h2>
-          <p style={{ color: 'rgba(248,248,255,0.45)', lineHeight: 1.75 }}>
-            Everything you need to transform written knowledge into immersive listening experiences.
-          </p>
-        </div>
-
-        {/* Asymmetric bento grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {/* Large accent card — AI Engine (spans 2 cols) */}
-          <div className="lg:col-span-2 bento-accent rounded-2xl p-8 scroll-reveal">
-            <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full pointer-events-none"
-              style={{ background: 'radial-gradient(circle,rgba(124,58,237,0.12) 0%,transparent 70%)' }} />
-            <div className="relative flex flex-col sm:flex-row gap-6 items-start">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.25)' }}>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <path d="M10 2a4 4 0 00-4 4v1.5L4.5 11h11L14 7.5V6a4 4 0 00-4-4z" fill="#a78bfa" opacity="0.9" />
-                  <path d="M7 11c0 1.7 1.3 3 3 3s3-1.3 3-3" stroke="#a78bfa" strokeWidth="1.3" fill="none" opacity="0.6" />
-                  <line x1="10" y1="14" x2="10" y2="16" stroke="#a78bfa" strokeWidth="1.4" strokeLinecap="round" opacity="0.5" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-bold text-xl mb-3" style={{ color: '#f8f8ff', letterSpacing: '-0.02em' }}>
-                  Neural Audio Synthesis Engine
-                </h3>
-                <p className="text-sm leading-relaxed mb-5" style={{ color: 'rgba(248,248,255,0.48)' }}>
-                  MindCast&apos;s AI doesn&apos;t just read your text — it understands it. The engine extracts key arguments, restructures them into a narrative arc, and delivers a natural, engaging narration with proper pacing, emphasis, and chapter breaks.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {['Natural prosody', 'Chapter detection', 'Narrative restructuring', 'Multi-voice support'].map((tag) => (
-                    <span key={tag} className="px-3 py-1 rounded-full text-[11px] font-medium"
-                      style={{ background: 'rgba(124,58,237,0.1)', color: '#c4b5fd', border: '1px solid rgba(124,58,237,0.18)' }}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Tall card — Instant Generation */}
-          <div className="bento-card rounded-2xl p-7 scroll-reveal sr-d1">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-5"
-              style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.18)' }}>
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M9 2l1.5 4H15l-3.5 2.5 1.5 4L9 10l-4 2.5 1.5-4L3 6h4.5z" fill="#4ade80" opacity="0.85" />
-              </svg>
-            </div>
-            <h3 className="font-bold text-base mb-2.5" style={{ color: '#f8f8ff', letterSpacing: '-0.02em' }}>Sub-10s Generation</h3>
-            <p className="text-sm leading-relaxed" style={{ color: 'rgba(248,248,255,0.42)' }}>
-              Paste your content and receive a fully narrated audio file in under 10 seconds. No queues, no waiting — just instant knowledge.
-            </p>
-          </div>
-
-          {/* Card — Smart Summarization */}
-          <div className="bento-card rounded-2xl p-7 scroll-reveal sr-d2">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-5"
-              style={{ background: 'rgba(2,132,199,0.1)', border: '1px solid rgba(2,132,199,0.18)' }}>
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <rect x="3" y="2" width="12" height="14" rx="2" stroke="#38bdf8" strokeWidth="1.5" fill="none" />
-                <path d="M6 6h6M6 9h6M6 12h4" stroke="#38bdf8" strokeWidth="1.3" strokeLinecap="round" />
-              </svg>
-            </div>
-            <h3 className="font-bold text-base mb-2.5" style={{ color: '#f8f8ff', letterSpacing: '-0.02em' }}>Smart Summarization</h3>
-            <p className="text-sm leading-relaxed" style={{ color: 'rgba(248,248,255,0.42)' }}>
-              Automatically distills long-form content into focused, digestible audio summaries without losing the core insights.
-            </p>
-          </div>
-
-          {/* Card — Topic Deep-Dives */}
-          <div className="bento-card rounded-2xl p-7 scroll-reveal sr-d3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-5"
-              style={{ background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.18)' }}>
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <circle cx="9" cy="9" r="7" stroke="#fcd34d" strokeWidth="1.5" fill="none" />
-                <path d="M9 5v4l2.5 2.5" stroke="#fcd34d" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <h3 className="font-bold text-base mb-2.5" style={{ color: '#f8f8ff', letterSpacing: '-0.02em' }}>Topic Deep-Dives</h3>
-            <p className="text-sm leading-relaxed" style={{ color: 'rgba(248,248,255,0.42)' }}>
-              Type any topic and MindCast generates a structured, research-backed audio exploration — no source material needed.
-            </p>
-          </div>
-
-          {/* Wide card — Export + Chapters (spans 2 cols) */}
-          <div className="lg:col-span-2 bento-card rounded-2xl p-7 scroll-reveal sr-d4">
-            <div className="flex flex-col sm:flex-row gap-8">
-              <div className="flex-1">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-5"
-                  style={{ background: 'rgba(192,38,211,0.1)', border: '1px solid rgba(192,38,211,0.18)' }}>
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                    <path d="M9 3v9M5 9l4 4 4-4" stroke="#e879f9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M3 14h12" stroke="#e879f9" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </div>
-                <h3 className="font-bold text-base mb-2.5" style={{ color: '#f8f8ff', letterSpacing: '-0.02em' }}>Export-Ready Audio</h3>
-                <p className="text-sm leading-relaxed" style={{ color: 'rgba(248,248,255,0.42)' }}>
-                  Download your generated audio as high-quality MP3 or stream directly. Share as a personal podcast episode or save for offline listening.
-                </p>
-              </div>
-              <div className="flex-1">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-5"
-                  style={{ background: 'rgba(5,150,105,0.1)', border: '1px solid rgba(5,150,105,0.18)' }}>
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                    <path d="M3 14l3.5-4 3 2.5L13 7l2 3" stroke="#34d399" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </svg>
-                </div>
-                <h3 className="font-bold text-base mb-2.5" style={{ color: '#f8f8ff', letterSpacing: '-0.02em' }}>Auto Chapter Markers</h3>
-                <p className="text-sm leading-relaxed" style={{ color: 'rgba(248,248,255,0.42)' }}>
-                  Every generated audio includes smart chapter markers so you can jump to specific sections, just like a real podcast.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Stat card */}
-          <div className="bento-card rounded-2xl p-7 flex flex-col justify-between scroll-reveal sr-d5">
-            <div>
-              <div className="font-bold mb-1" style={{ fontSize: '2.8rem', letterSpacing: '-0.04em', color: '#a78bfa', lineHeight: 1 }}>
-                &lt;10s
-              </div>
-              <p className="text-sm leading-relaxed mt-3" style={{ color: 'rgba(248,248,255,0.42)' }}>
-                Average time from text input to fully narrated audio output.
-              </p>
-            </div>
-            <div className="mt-6 h-px" style={{ background: 'linear-gradient(90deg,rgba(124,58,237,0.4),transparent)' }} />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── App Studio Simulator ─────────────────────────────────────────────────────
-interface AudioOutput {
-  title: string;
-  duration: string;
-  summary: string;
-  chapters: string[];
-}
-
-function AppStudio() {
-  const [topic, setTopic] = useState('');
-  const [phase, setPhase] = useState<'idle' | 'loading' | 'done'>('idle');
-  const [loadingMsg, setLoadingMsg] = useState('');
-  const [output, setOutput] = useState<AudioOutput | null>(null);
-  const [playProgress, setPlayProgress] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const loadingMessages = [
-    'Parsing your topic…',
-    'Structuring narrative arc…',
-    'Synthesizing audio layers…',
-    'Applying voice prosody…',
-    'Finalising deep-dive…',
-  ];
-
-  const generateOutput = (t: string): AudioOutput => {
-    const trimmed = t.trim() || 'Artificial Intelligence';
-    const mins = 8 + Math.floor(trimmed.length % 7);
-    const secs = (trimmed.length * 13) % 60;
-    return {
-      title: `Deep-Dive: ${trimmed.charAt(0).toUpperCase() + trimmed.slice(1)}`,
-      duration: `${mins}:${secs.toString().padStart(2, '0')}`,
-      summary: `This AI-generated audio explores the core principles, historical context, and modern implications of "${trimmed}". The narration covers foundational concepts, key debates in the field, and actionable takeaways — structured as a focused, research-backed deep-dive designed for curious minds.`,
-      chapters: [
-        `Introduction to ${trimmed.split(' ')[0]}`,
-        'Historical Context & Origins',
-        'Core Mechanisms Explained',
-        'Real-World Applications',
-        'Key Takeaways',
-      ],
-    };
-  };
-
-  const handleGenerate = () => {
-    if (!topic.trim() || phase === 'loading') return;
-    setPhase('loading');
-    setOutput(null);
-    setPlayProgress(0);
-    setIsPlaying(false);
-
-    let msgIdx = 0;
-    setLoadingMsg(loadingMessages[0]);
-    const msgInterval = setInterval(() => {
-      msgIdx = (msgIdx + 1) % loadingMessages.length;
-      setLoadingMsg(loadingMessages[msgIdx]);
-    }, 700);
-
-    setTimeout(() => {
-      clearInterval(msgInterval);
-      setOutput(generateOutput(topic));
-      setPhase('done');
-    }, 3500);
-  };
-
-  const togglePlay = () => {
-    if (isPlaying) {
-      setIsPlaying(false);
-      if (progressRef.current) clearInterval(progressRef.current);
-    } else {
-      setIsPlaying(true);
-      progressRef.current = setInterval(() => {
-        setPlayProgress((p) => {
-          if (p >= 100) {
-            setIsPlaying(false);
-            if (progressRef.current) clearInterval(progressRef.current);
-            return 100;
-          }
-          return p + 0.4;
-        });
-      }, 80);
-    }
-  };
-
-  useEffect(() => {
-    return () => { if (progressRef.current) clearInterval(progressRef.current); };
-  }, []);
-
-  const waveHeights = [30,55,40,70,45,85,60,35,75,50,90,40,65,30,80,55,45,70,35,60,85,40,55,75,30,65,50,80,40,70,55,35,90,45,60,75,40,55,30,50,70,45,80,35,65,55,40,75];
-
-  return (
-    <div className="min-h-screen pt-24 pb-20 px-5 sm:px-8">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-12 animate-fade-up">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold mb-6"
-            style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.22)', color: '#a78bfa' }}>
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#a78bfa', animation: 'glow-pulse 2s ease-in-out infinite' }} />
-            Interactive App Studio
-          </div>
-          <h1 className="font-bold mb-4" style={{ fontSize: 'clamp(2rem,4vw,3.2rem)', letterSpacing: '-0.04em', color: '#f8f8ff', lineHeight: 1.06 }}>
-            Generate your audio<br /><span className="gradient-text">deep-dive now.</span>
-          </h1>
-          <p style={{ color: 'rgba(248,248,255,0.45)', lineHeight: 1.75, maxWidth: '480px', margin: '0 auto' }}>
-            Type any topic or paste text below. MindCast&apos;s AI will transform it into a narrated audio deep-dive instantly.
-          </p>
-        </div>
-
-        {/* Input form */}
-        <div className="animate-fade-up delay-200 rounded-2xl p-6 mb-6"
-          style={{ background: 'rgba(17,17,21,0.9)', border: '1px solid rgba(124,58,237,0.15)', boxShadow: '0 24px 60px rgba(0,0,0,0.4)' }}>
-          <label className="block text-xs font-semibold mb-3 uppercase tracking-widest" style={{ color: 'rgba(248,248,255,0.35)' }}>
-            Topic or Text
-          </label>
-          <textarea
-            className="studio-input w-full rounded-xl px-4 py-3.5 text-sm resize-none mb-4"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', color: '#f8f8ff', minHeight: '110px', lineHeight: 1.7 }}
-            placeholder="e.g. The neuroscience of habit formation, or paste an article…"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleGenerate(); }}
-            disabled={phase === 'loading'}
-          />
-
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-4 flex-wrap">
-              {['Quick (3 min)', 'Standard (8 min)', 'Deep (15 min)'].map((opt, i) => (
-                <label key={opt} className="flex items-center gap-2 cursor-pointer">
-                  <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center"
-                    style={{ border: `1.5px solid ${i === 1 ? '#7c3aed' : 'rgba(255,255,255,0.2)'}`, background: i === 1 ? '#7c3aed' : 'transparent' }}>
-                    {i === 1 && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                  </div>
-                  <span className="text-xs" style={{ color: i === 1 ? '#a78bfa' : 'rgba(248,248,255,0.38)' }}>{opt}</span>
-                </label>
-              ))}
-            </div>
-            <button onClick={handleGenerate} disabled={!topic.trim() || phase === 'loading'}
-              className="btn-primary flex items-center gap-2.5 px-6 py-3 rounded-full text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none">
-              <span>{phase === 'loading' ? 'Generating…' : 'Generate Audio'}</span>
-              {phase !== 'loading' && (
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="relative z-10">
-                  <path d="M2.5 7h9M7.5 3.5l3.5 3.5-3.5 3.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Loading state */}
-        {phase === 'loading' && (
-          <div className="animate-fade-in rounded-2xl p-8 text-center"
-            style={{ background: 'rgba(17,17,21,0.9)', border: '1px solid rgba(124,58,237,0.2)' }}>
-            <div className="flex items-center justify-center mb-5">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center"
-                style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.25)' }}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" style={{ animation: 'spin-slow 1.2s linear infinite' }}>
-                  <circle cx="11" cy="11" r="9" stroke="rgba(124,58,237,0.25)" strokeWidth="2" fill="none" />
-                  <path d="M11 2a9 9 0 019 9" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" fill="none" />
-                </svg>
-              </div>
-            </div>
-            <div className="text-sm font-semibold mb-2" style={{ color: '#f8f8ff' }}>{loadingMsg}</div>
-            <div className="text-xs" style={{ color: 'rgba(248,248,255,0.35)' }}>Crafting your personalised audio deep-dive…</div>
-            <div className="mt-5 flex items-end justify-center gap-[3px] h-8">
-              {Array.from({ length: 20 }).map((_, i) => (
-                <div key={i} className="waveform-bar playing"
-                  style={{ height: `${30 + (i % 5) * 14}%`, opacity: 0.5, animationDelay: `${i * 0.08}s` }} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Output card */}
-        {phase === 'done' && output && (
-          <div className="animate-fade-in rounded-2xl overflow-hidden"
-            style={{ background: 'rgba(17,17,21,0.95)', border: '1px solid rgba(124,58,237,0.22)', boxShadow: '0 24px 80px rgba(0,0,0,0.5),0 0 40px rgba(124,58,237,0.08)' }}>
-            {/* Output header */}
-            <div className="flex items-center justify-between px-6 py-4"
-              style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(124,58,237,0.05)' }}>
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg,#7c3aed,#4f46e5)' }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M7 1a3 3 0 00-3 3v1l-.8 2h7.6L10 5V4a3 3 0 00-3-3z" fill="white" opacity="0.9" />
-                    <path d="M4.5 7c0 1.4 1.1 2.5 2.5 2.5S9.5 8.4 9.5 7" stroke="white" strokeWidth="1.1" fill="none" opacity="0.6" />
-                    <line x1="7" y1="9.5" x2="7" y2="11" stroke="white" strokeWidth="1.2" strokeLinecap="round" opacity="0.5" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold" style={{ color: '#f8f8ff' }}>MindCast AI</div>
-                  <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'rgba(248,248,255,0.35)' }}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-                    Audio ready
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold"
-                  style={{ background: 'rgba(124,58,237,0.12)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.2)' }}>
-                  {output.duration}
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold"
-                  style={{ background: 'rgba(34,197,94,0.1)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.2)' }}>
-                  ✓ Generated
-                </span>
-              </div>
-            </div>
-
-            {/* Title + Summary */}
-            <div className="px-6 pt-6 pb-4">
-              <h3 className="font-bold text-lg mb-3" style={{ color: '#f8f8ff', letterSpacing: '-0.025em' }}>{output.title}</h3>
-              <p className="text-sm leading-relaxed" style={{ color: 'rgba(248,248,255,0.52)', lineHeight: 1.75 }}>{output.summary}</p>
-            </div>
-
-            {/* Waveform + player */}
-            <div className="px-6 py-5" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <div className="flex items-end gap-[2.5px] h-12 mb-4">
-                {waveHeights.map((h, i) => {
-                  const played = (i / waveHeights.length) * 100 < playProgress;
-                  return (
-                    <div key={i} className={`waveform-bar ${isPlaying && Math.abs(i - Math.floor((playProgress / 100) * waveHeights.length)) < 3 ? 'playing' : ''}`}
-                      style={{ height: `${h}%`, background: played ? 'linear-gradient(180deg,#a78bfa,#4f46e5)' : 'rgba(255,255,255,0.09)', animationDelay: `${(i % 5) * 0.12}s`, flex: '1', maxWidth: '4px' }} />
-                  );
-                })}
-              </div>
-
-              {/* Progress bar */}
-              <div className="h-1 rounded-full mb-2 overflow-hidden cursor-pointer"
-                style={{ background: 'rgba(255,255,255,0.07)' }}
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const pct = ((e.clientX - rect.left) / rect.width) * 100;
-                  setPlayProgress(Math.max(0, Math.min(100, pct)));
-                }}>
-                <div className="h-full rounded-full transition-all duration-100"
-                  style={{ width: `${playProgress}%`, background: 'linear-gradient(90deg,#7c3aed,#4f46e5)' }} />
-              </div>
-              <div className="flex justify-between text-[10px] mb-5" style={{ color: 'rgba(248,248,255,0.3)' }}>
-                <span>{Math.floor((playProgress / 100) * parseInt(output.duration))}:{String(Math.floor(((playProgress / 100) * parseInt(output.duration) * 60) % 60)).padStart(2, '0')}</span>
-                <span>{output.duration}</span>
-              </div>
-
-              {/* Controls */}
-              <div className="flex items-center justify-center gap-6">
-                <button className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
-                  style={{ color: 'rgba(248,248,255,0.4)' }}
-                  onClick={() => setPlayProgress(Math.max(0, playProgress - 10))}>
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                    <path d="M14 4L7 9l7 5V4z" fill="currentColor" opacity="0.7" />
-                    <line x1="4" y1="4" x2="4" y2="14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
-                  </svg>
-                </button>
-                <button onClick={togglePlay}
-                  className="w-13 h-13 flex items-center justify-center rounded-full transition-all"
-                  style={{ width: '52px', height: '52px', background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', boxShadow: '0 6px 24px rgba(124,58,237,0.5)' }}>
-                  {isPlaying
-                    ? <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="4" y="3" width="3.5" height="12" rx="1.2" fill="white" /><rect x="10.5" y="3" width="3.5" height="12" rx="1.2" fill="white" /></svg>
-                    : <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M6 4l9 5-9 5V4z" fill="white" /></svg>
-                  }
-                </button>
-                <button className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
-                  style={{ color: 'rgba(248,248,255,0.4)' }}
-                  onClick={() => setPlayProgress(Math.min(100, playProgress + 10))}>
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                    <path d="M4 4l7 5-7 5V4z" fill="currentColor" opacity="0.7" />
-                    <line x1="14" y1="4" x2="14" y2="14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            {/* Chapters */}
-            <div className="px-6 pb-6" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <div className="text-[10px] font-semibold uppercase tracking-widest mb-3 pt-5" style={{ color: 'rgba(248,248,255,0.3)' }}>
-                Chapters
-              </div>
-              <div className="flex flex-col gap-2">
-                {output.chapters.map((ch, i) => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-2.5 rounded-xl cursor-pointer transition-all"
-                    style={{ background: i === 0 ? 'rgba(124,58,237,0.1)' : 'rgba(255,255,255,0.03)', border: `1px solid ${i === 0 ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.05)'}` }}>
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
-                      style={{ background: i === 0 ? '#7c3aed' : 'rgba(255,255,255,0.08)', color: i === 0 ? 'white' : 'rgba(248,248,255,0.35)' }}>
-                      {i + 1}
-                    </div>
-                    <span className="text-xs font-medium" style={{ color: i === 0 ? '#c4b5fd' : 'rgba(248,248,255,0.55)' }}>{ch}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-3 px-6 pb-6 flex-wrap">
-              <button className="btn-primary flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold text-white">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="relative z-10">
-                  <path d="M6 2v6M3 6l3 3 3-3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M2 10h8" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-                <span>Download MP3</span>
+            {/* CTA */}
+            {currentView === 'landing' ? (
+              <button
+                onClick={() => switchView('studio')}
+                className="mc-btn-primary"
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  borderRadius: '9999px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  letterSpacing: '0.04em',
+                  color: '#fff',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Launch App
               </button>
-              <button className="btn-ghost flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold"
-                style={{ color: 'rgba(248,248,255,0.6)' }}
-                onClick={() => { setPhase('idle'); setOutput(null); setTopic(''); setPlayProgress(0); setIsPlaying(false); }}>
-                Generate Another
+            ) : (
+              <button
+                onClick={() => switchView('landing')}
+                className="mc-btn-ghost"
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  borderRadius: '9999px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: 'pointer',
+                }}
+              >
+                Back to Overview
               </button>
-            </div>
+            )}
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
+        </nav>
 
-// ─── Footer ───────────────────────────────────────────────────────────────────
-function Footer({ onLaunch }: { onLaunch: () => void }) {
-  return (
-    <footer className="px-5 sm:px-8 py-14" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-      <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col md:flex-row items-start justify-between gap-10 mb-12">
-          {/* Brand */}
-          <div className="max-w-[240px]">
-            <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', boxShadow: '0 2px 8px rgba(124,58,237,0.35)' }}>
-                <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                  <path d="M7 1a3 3 0 00-3 3v1l-.8 2h7.6L10 5V4a3 3 0 00-3-3z" fill="white" opacity="0.9" />
-                  <path d="M4.5 7c0 1.4 1.1 2.5 2.5 2.5S9.5 8.4 9.5 7" stroke="white" strokeWidth="1.1" fill="none" opacity="0.6" />
-                </svg>
-              </div>
-              <span className="font-bold" style={{ color: '#f8f8ff', letterSpacing: '-0.02em' }}>MindCast</span>
-            </div>
-            <p className="text-sm leading-relaxed" style={{ color: 'rgba(248,248,255,0.28)' }}>
-              AI-powered audio generation. Turn any text into a podcast deep-dive.
-            </p>
-          </div>
-
-          {/* Links */}
-          <div className="flex flex-wrap gap-12">
-            {[
-              { heading: 'Product', links: ['Features', 'App Studio', 'Audio Export', 'Chapters'] },
-              { heading: 'Company', links: ['About', 'Blog', 'Careers', 'Press'] },
-              { heading: 'Legal', links: ['Privacy', 'Terms', 'Security', 'Cookies'] },
-            ].map((col) => (
-              <div key={col.heading}>
-                <div className="text-[10px] font-semibold uppercase tracking-widest mb-4" style={{ color: 'rgba(248,248,255,0.3)' }}>
-                  {col.heading}
-                </div>
-                <div className="flex flex-col gap-2.5">
-                  {col.links.map((link) => (
-                    <a key={link} href="#" className="text-sm transition-colors duration-200"
-                      style={{ color: 'rgba(248,248,255,0.28)' }}
-                      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = 'rgba(248,248,255,0.65)')}
-                      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'rgba(248,248,255,0.28)')}>
-                      {link}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* ── VIEWS ── */}
+        <div key={viewKey} className="mc-view-enter" style={{ position: 'relative', zIndex: 1 }}>
+          {currentView === 'landing' ? (
+            <LandingView onLaunch={() => switchView('studio')} />
+          ) : (
+            <StudioView
+              inputTopic={inputTopic}
+              setInputTopic={setInputTopic}
+              selectedVoice={selectedVoice}
+              setSelectedVoice={setSelectedVoice}
+              selectedDepth={selectedDepth}
+              setSelectedDepth={setSelectedDepth}
+              isProcessing={isProcessing}
+              stepIndex={stepIndex}
+              processingSteps={processingSteps}
+              episodeResult={episodeResult}
+              isPlaying={isPlaying}
+              setIsPlaying={setIsPlaying}
+              handleGenerateEpisode={handleGenerateEpisode}
+              onExit={() => switchView('landing')}
+            />
+          )}
         </div>
 
-        {/* CTA strip */}
-        <div className="rounded-2xl p-8 mb-10 flex flex-col sm:flex-row items-center justify-between gap-6"
-          style={{ background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.15)' }}>
-          <div>
-            <div className="font-bold text-base mb-1" style={{ color: '#f8f8ff', letterSpacing: '-0.02em' }}>Ready to try MindCast?</div>
-            <div className="text-sm" style={{ color: 'rgba(248,248,255,0.4)' }}>Generate your first audio deep-dive in under 10 seconds.</div>
-          </div>
-          <button onClick={onLaunch}
-            className="btn-primary flex items-center gap-2 px-6 py-3 rounded-full text-sm font-semibold text-white flex-shrink-0">
-            <span>Open App Studio</span>
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="relative z-10">
-              <path d="M2 6h8M6 2l4 4-4 4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Bottom bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-8"
-          style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <div className="text-xs" style={{ color: 'rgba(248,248,255,0.2)' }}>
-            © 2026 MindCast. All rights reserved.
-          </div>
-          <div className="text-xs text-neutral-500 font-mono tracking-wider">
+        {/* ── FOOTER ── */}
+        <footer
+          style={{
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            padding: '2rem 1.5rem',
+            marginTop: '6rem',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)' }}>
+            © {new Date().getFullYear()} MindCast. All rights reserved.
+          </p>
+          <p
+            style={{
+              fontSize: '12px',
+              color: 'rgba(255,255,255,0.3)',
+              fontFamily: 'monospace',
+              letterSpacing: '0.08em',
+            }}
+          >
             Made by Aditya Naik and Vihaan Vaghela
-          </div>
-        </div>
+          </p>
+        </footer>
       </div>
-    </footer>
-  );
-}
 
-// ─── Landing View ─────────────────────────────────────────────────────────────
-function LandingView({ onLaunch }: { onLaunch: () => void }) {
-  return (
-    <>
-      <HeroSection onLaunch={onLaunch} />
-      <Ticker />
-      <FeaturesSection />
-      <Footer onLaunch={onLaunch} />
+      <style>{`
+        @media (max-width: 768px) {
+          .hidden-mobile { display: none !important; }
+        }
+      `}</style>
     </>
   );
 }
 
-// ─── Root Page ────────────────────────────────────────────────────────────────
-export default function Page() {
-  const [view, setView] = useState<'landing' | 'studio'>('landing');
-
-  useEffect(() => {
-    if (view === 'landing') window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [view]);
-
+/* ─────────────────────────────────────────────────────────────────────────────
+   LANDING VIEW
+───────────────────────────────────────────────────────────────────────────── */
+function LandingView({ onLaunch }: { onLaunch: () => void }) {
   return (
-    <div suppressHydrationWarning className="mc-root min-h-screen" style={{ background: '#0a0a0c', color: '#f8f8ff' }}>
-      <style>{globalStyles}</style>
-      <Background />
-      <Navbar view={view} setView={setView} />
-      <main>
-        {view === 'landing'
-          ? <LandingView onLaunch={() => setView('studio')} />
-          : <AppStudio />
-        }
-      </main>
+    <>
+      {/* HERO */}
+      <section
+        style={{
+          maxWidth: '80rem',
+          margin: '0 auto',
+          padding: '7rem 1.5rem 6rem',
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
+        {/* Badge */}
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.375rem 0.875rem',
+            borderRadius: '9999px',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            fontSize: '12px',
+            color: '#a5b4fc',
+            marginBottom: '2rem',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <span
+            className="mc-ping"
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '9999px',
+              background: '#818cf8',
+              display: 'inline-block',
+              flexShrink: 0,
+            }}
+          />
+          Next-Gen Audio Intelligence Platform
+        </div>
+
+        {/* Headline */}
+        <h1
+          style={{
+            fontSize: 'clamp(2.25rem, 6vw, 4.5rem)',
+            fontWeight: 800,
+            letterSpacing: '-0.04em',
+            lineHeight: 1.08,
+            color: '#fff',
+            maxWidth: '52rem',
+            marginBottom: '1.5rem',
+          }}
+        >
+          Transform complex data into{' '}
+          <span className="mc-gradient-text">immersive audio</span> instantly.
+        </h1>
+
+        {/* Subheadline */}
+        <p
+          style={{
+            color: 'rgba(255,255,255,0.45)',
+            fontSize: 'clamp(0.9rem, 2vw, 1.1rem)',
+            maxWidth: '38rem',
+            marginBottom: '3rem',
+            lineHeight: 1.7,
+            fontWeight: 400,
+          }}
+        >
+          MindCast synthesizes raw documents, notes, and ideas into cinematic, studio-quality
+          conversational audio streams with zero latency and ultra-realistic voice models.
+        </p>
+
+        {/* CTAs */}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '1rem',
+            justifyContent: 'center',
+            width: '100%',
+          }}
+        >
+          <button
+            onClick={onLaunch}
+            className="mc-btn-primary"
+            style={{
+              padding: '1rem 2rem',
+              borderRadius: '16px',
+              fontSize: '14px',
+              fontWeight: 500,
+              color: '#fff',
+              border: '1px solid rgba(99,102,241,0.3)',
+              cursor: 'pointer',
+              minWidth: '180px',
+            }}
+          >
+            Launch Studio App
+          </button>
+          <a
+            href="#features"
+            style={{
+              padding: '1rem 2rem',
+              borderRadius: '16px',
+              fontSize: '14px',
+              fontWeight: 500,
+              color: 'rgba(255,255,255,0.65)',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              textDecoration: 'none',
+              transition: 'background 0.2s, color 0.2s',
+              minWidth: '180px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.07)';
+              e.currentTarget.style.color = '#fff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+              e.currentTarget.style.color = 'rgba(255,255,255,0.65)';
+            }}
+          >
+            Explore Capabilities
+          </a>
+        </div>
+      </section>
+
+      {/* FEATURES BENTO GRID */}
+      <section
+        id="features"
+        style={{
+          maxWidth: '80rem',
+          margin: '0 auto',
+          padding: '6rem 1.5rem',
+          borderTop: '1px solid rgba(255,255,255,0.04)',
+        }}
+      >
+        <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+          <h2
+            style={{
+              fontSize: 'clamp(1.5rem, 3vw, 2rem)',
+              fontWeight: 700,
+              color: '#fff',
+              letterSpacing: '-0.03em',
+              marginBottom: '0.75rem',
+            }}
+          >
+            Engineered for absolute fidelity.
+          </h2>
+          <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>
+            Built from the ground up for seamless, high-performance audio generation workflows.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: '1.5rem',
+          }}
+        >
+          {[
+            {
+              num: '01',
+              title: 'Neural Voice Synthesis',
+              desc: 'Advanced generative models producing natural pacing, organic conversational interruptions, and authentic human emotion.',
+            },
+            {
+              num: '02',
+              title: 'Instant Stream Processing',
+              desc: 'Lightning-fast compilation pipelines turning raw text blocks into rich multi-format studio podcast episodes.',
+            },
+            {
+              num: '03',
+              title: 'Adaptive Formatting',
+              desc: 'Smart segmentation that structures deep conversations, outline highlights, and executive summaries fluidly.',
+            },
+          ].map((feat) => (
+            <div
+              key={feat.num}
+              className="mc-card"
+              style={{ padding: '2rem', borderRadius: '24px' }}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '12px',
+                  background: 'rgba(99,102,241,0.1)',
+                  border: '1px solid rgba(99,102,241,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#a5b4fc',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  marginBottom: '1.5rem',
+                }}
+              >
+                {feat.num}
+              </div>
+              <h3
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: '#fff',
+                  marginBottom: '0.5rem',
+                }}
+              >
+                {feat.title}
+              </h3>
+              <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.7 }}>
+                {feat.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   STUDIO VIEW
+───────────────────────────────────────────────────────────────────────────── */
+interface StudioViewProps {
+  inputTopic: string;
+  setInputTopic: (v: string) => void;
+  selectedVoice: string;
+  setSelectedVoice: (v: string) => void;
+  selectedDepth: string;
+  setSelectedDepth: (v: string) => void;
+  isProcessing: boolean;
+  stepIndex: number;
+  processingSteps: string[];
+  episodeResult: EpisodeResult | null;
+  isPlaying: boolean;
+  setIsPlaying: (v: boolean) => void;
+  handleGenerateEpisode: (e: React.FormEvent) => void;
+  onExit: () => void;
+}
+
+function StudioView({
+  inputTopic,
+  setInputTopic,
+  selectedVoice,
+  setSelectedVoice,
+  selectedDepth,
+  setSelectedDepth,
+  isProcessing,
+  stepIndex,
+  processingSteps,
+  episodeResult,
+  isPlaying,
+  setIsPlaying,
+  handleGenerateEpisode,
+  onExit,
+}: StudioViewProps) {
+  return (
+    <div style={{ maxWidth: '64rem', margin: '0 auto', padding: '3rem 1.5rem' }}>
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          marginBottom: '2rem',
+          gap: '1rem',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <h2
+            style={{
+              fontSize: '22px',
+              fontWeight: 700,
+              color: '#fff',
+              letterSpacing: '-0.03em',
+              marginBottom: '0.25rem',
+            }}
+          >
+            MindCast Production Studio
+          </h2>
+          <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>
+            Configure your parameters and generate real-time synthetic audio streams.
+          </p>
+        </div>
+        <button
+          onClick={onExit}
+          className="mc-btn-ghost"
+          style={{
+            padding: '0.375rem 0.875rem',
+            borderRadius: '10px',
+            fontSize: '12px',
+            color: 'rgba(255,255,255,0.5)',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          ← Exit Studio
+        </button>
+      </div>
+
+      {/* Grid */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gap: '2rem',
+          alignItems: 'start',
+        }}
+      >
+        {/* CONFIG PANEL */}
+        <div
+          style={{
+            padding: '1.5rem',
+            borderRadius: '24px',
+            background: 'rgba(255,255,255,0.02)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(16px)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.5rem',
+          }}
+        >
+          {/* Voice */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '11px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                color: 'rgba(255,255,255,0.4)',
+                fontWeight: 600,
+                marginBottom: '0.5rem',
+              }}
+            >
+              Host Persona
+            </label>
+            <div style={{ position: 'relative' }}>
+              <select
+                value={selectedVoice}
+                onChange={(e) => setSelectedVoice(e.target.value)}
+                className="mc-select"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem 2.25rem 0.75rem 0.875rem',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                <option>Aria &amp; Marcus (Dynamic Duo)</option>
+                <option>Elena (Solo Executive Brief)</option>
+                <option>David (Deep Technical Breakdown)</option>
+              </select>
+              <span
+                style={{
+                  position: 'absolute',
+                  right: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'rgba(255,255,255,0.3)',
+                  pointerEvents: 'none',
+                  fontSize: '10px',
+                }}
+              >
+                ▾
+              </span>
+            </div>
+          </div>
+
+          {/* Depth */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '11px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                color: 'rgba(255,255,255,0.4)',
+                fontWeight: 600,
+                marginBottom: '0.5rem',
+              }}
+            >
+              Episode Depth
+            </label>
+            <div style={{ position: 'relative' }}>
+              <select
+                value={selectedDepth}
+                onChange={(e) => setSelectedDepth(e.target.value)}
+                className="mc-select"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem 2.25rem 0.75rem 0.875rem',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                <option>Deep Dive (8-10 min)</option>
+                <option>Quick Summary (3-5 min)</option>
+                <option>Executive Highlights (90 sec)</option>
+              </select>
+              <span
+                style={{
+                  position: 'absolute',
+                  right: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'rgba(255,255,255,0.3)',
+                  pointerEvents: 'none',
+                  fontSize: '10px',
+                }}
+              >
+                ▾
+              </span>
+            </div>
+          </div>
+
+          {/* Tip */}
+          <div
+            style={{
+              padding: '1rem',
+              borderRadius: '16px',
+              background: 'rgba(99,102,241,0.05)',
+              border: '1px solid rgba(99,102,241,0.2)',
+              fontSize: '12px',
+              color: '#a5b4fc',
+              lineHeight: 1.6,
+            }}
+          >
+            💡{' '}
+            <span style={{ fontWeight: 500, color: '#fff' }}>Pro Tip:</span> Input any complex
+            topic or paste markdown notes to experience full multi-speaker neural generation.
+          </div>
+        </div>
+
+        {/* WORKSPACE */}
+        <div
+          style={{
+            gridColumn: 'span 2',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.5rem',
+          }}
+        >
+          <div
+            style={{
+              padding: '2rem',
+              borderRadius: '24px',
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              backdropFilter: 'blur(16px)',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.3)',
+            }}
+          >
+            <form onSubmit={handleGenerateEpisode} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '11px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    color: 'rgba(255,255,255,0.4)',
+                    fontWeight: 600,
+                    marginBottom: '0.5rem',
+                  }}
+                >
+                  Topic or Source Text
+                </label>
+                <textarea
+                  rows={4}
+                  value={inputTopic}
+                  onChange={(e) => setInputTopic(e.target.value)}
+                  placeholder="Enter a topic, research question, or paste text content to synthesize..."
+                  required
+                  className="mc-textarea"
+                  style={{
+                    width: '100%',
+                    padding: '1rem',
+                    borderRadius: '16px',
+                    fontSize: '13px',
+                  }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isProcessing}
+                className="mc-btn-primary"
+                style={{
+                  width: '100%',
+                  padding: '1rem',
+                  borderRadius: '16px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#fff',
+                  border: 'none',
+                  cursor: isProcessing ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isProcessing ? 'Synthesizing Stream...' : 'Generate Podcast Episode'}
+              </button>
+            </form>
+
+            {/* LOADING */}
+            {isProcessing && (
+              <div
+                className="mc-animate-fade"
+                style={{
+                  marginTop: '2rem',
+                  padding: '2rem',
+                  borderRadius: '16px',
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '1rem',
+                }}
+              >
+                <div
+                  className="mc-spin"
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '9999px',
+                    border: '2px solid rgba(99,102,241,0.3)',
+                    borderTopColor: '#6366f1',
+                  }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <p style={{ fontSize: '13px', fontWeight: 500, color: '#fff' }}>
+                    {processingSteps[stepIndex]}
+                  </p>
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }}>
+                    Step {stepIndex + 1} of {processingSteps.length}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* RESULT */}
+            {episodeResult && !isProcessing && (
+              <div
+                className="mc-result-card"
+                style={{
+                  marginTop: '2rem',
+                  padding: '1.5rem 2rem',
+                  borderRadius: '16px',
+                  background: 'linear-gradient(to bottom, rgba(99,102,241,0.08), transparent)',
+                  border: '1px solid rgba(99,102,241,0.25)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1.5rem',
+                }}
+              >
+                {/* Title row */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    paddingBottom: '1rem',
+                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <div>
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        fontFamily: 'monospace',
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        color: '#a5b4fc',
+                        background: 'rgba(99,102,241,0.1)',
+                        padding: '0.25rem 0.625rem',
+                        borderRadius: '9999px',
+                        border: '1px solid rgba(99,102,241,0.2)',
+                      }}
+                    >
+                      {episodeResult.host}
+                    </span>
+                    <h3
+                      style={{
+                        fontSize: '17px',
+                        fontWeight: 700,
+                        color: '#fff',
+                        marginTop: '0.5rem',
+                        letterSpacing: '-0.02em',
+                      }}
+                    >
+                      {episodeResult.title}
+                    </h3>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '12px',
+                      padding: '0.25rem 0.75rem',
+                      borderRadius: '9999px',
+                      background: 'rgba(255,255,255,0.05)',
+                      color: 'rgba(255,255,255,0.6)',
+                      fontFamily: 'monospace',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {episodeResult.duration}
+                  </span>
+                </div>
+
+                {/* Summary */}
+                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.7 }}>
+                  {episodeResult.summary}
+                </p>
+
+                {/* Audio Player */}
+                <div
+                  style={{
+                    padding: '1rem',
+                    borderRadius: '12px',
+                    background: 'rgba(0,0,0,0.5)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.75rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '1rem',
+                    }}
+                  >
+                    <button
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '9999px',
+                        background: '#4f46e5',
+                        border: 'none',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        flexShrink: 0,
+                        boxShadow: '0 4px 12px rgba(99,102,241,0.4)',
+                        transition: 'background 0.2s',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#6366f1')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = '#4f46e5')}
+                    >
+                      {isPlaying ? '❚❚' : '▶'}
+                    </button>
+                    <div
+                      style={{
+                        flex: 1,
+                        height: '8px',
+                        background: 'rgba(255,255,255,0.08)',
+                        borderRadius: '9999px',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <div className="mc-progress-bar" />
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        color: 'rgba(255,255,255,0.4)',
+                        fontFamily: 'monospace',
+                        flexShrink: 0,
+                      }}
+                    >
+                      01:14 / {episodeResult.duration}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Transcript */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <h4
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      color: 'rgba(255,255,255,0.35)',
+                    }}
+                  >
+                    Interactive Transcript Preview
+                  </h4>
+                  <div
+                    className="mc-scrollbar"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.625rem',
+                      maxHeight: '12rem',
+                      overflowY: 'auto',
+                      paddingRight: '0.25rem',
+                    }}
+                  >
+                    {episodeResult.transcript.map((line, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '0.75rem',
+                          borderRadius: '12px',
+                          background: 'rgba(0,0,0,0.3)',
+                          border: '1px solid rgba(255,255,255,0.05)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.25rem',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#a5b4fc',
+                          }}
+                        >
+                          {line.speaker}
+                        </span>
+                        <p
+                          style={{
+                            fontSize: '12px',
+                            color: 'rgba(255,255,255,0.6)',
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          {line.text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
