@@ -139,6 +139,16 @@ export default function DashboardContent() {
 
   const displayName = userName ? userName.split(' ')[0] : '';
 
+  // Build sector scores from latest assessment for MiraInsightCard
+  const latestAssessment = assessmentHistory.length > 0 ? assessmentHistory[assessmentHistory.length - 1] : null;
+
+  const sectorScores = latestAssessment ? [
+    { key: 'stress', label: 'Stress Management', score: latestAssessment.stress_score ?? 0 },
+    { key: 'sleep', label: 'Sleep Quality', score: latestAssessment.sleep_score ?? 0 },
+    { key: 'work_study', label: 'Work / Study Load', score: (latestAssessment as any).work_study_score ?? latestAssessment.lifestyle_score ?? 0 },
+    { key: 'emotional', label: 'Emotional Balance', score: (latestAssessment as any).emotional_score ?? latestAssessment.psychology_score ?? 0 },
+  ].filter(s => s.score > 0) : [];
+
   return (
     <div className="px-5 lg:px-8 xl:px-10 py-6 pb-24 lg:pb-8 max-w-screen-2xl mx-auto page-enter">
       {/* Page Header */}
@@ -243,7 +253,12 @@ export default function DashboardContent() {
 
         {/* Mira Insight */}
         <motion.div variants={itemVariants} className="md:col-span-1 xl:col-span-2">
-          <MiraInsightCard insight={null} />
+          <MiraInsightCard
+            insight={null}
+            overallScore={latestAssessment?.overall_score}
+            scoreTrend={stats?.assessment_trend as 'improving' | 'declining' | 'stable' | undefined}
+            sectorScores={sectorScores}
+          />
         </motion.div>
 
         {/* Recent Journal */}

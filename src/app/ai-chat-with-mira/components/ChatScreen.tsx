@@ -141,14 +141,21 @@ export default function ChatScreen() {
 
     setMessages((prev) => [...prev, userMessage]);
     setIsStreaming(true);
-
-    // Show typing indicator briefly before streaming starts
     setShowTypingIndicator(true);
 
     const streamingId = `msg-mira-${Date.now()}`;
     streamingIdRef.current = streamingId;
 
     let streamingStarted = false;
+
+    // Build enriched assessment data with tier/role fields
+    const enrichedAssessmentData = assessmentData ? {
+      ...assessmentData,
+      tier: (assessmentData as any).tier ?? undefined,
+      user_role: (assessmentData as any).user_role ?? undefined,
+      work_study_score: (assessmentData as any).work_study_score ?? assessmentData.lifestyle_score,
+      emotional_score: (assessmentData as any).emotional_score ?? assessmentData.psychology_score,
+    } : null;
 
     try {
       await chatApi.streamMessage(
@@ -157,7 +164,6 @@ export default function ChatScreen() {
           if (!streamingStarted) {
             streamingStarted = true;
             setShowTypingIndicator(false);
-            // Add the streaming message now that we have content
             setMessages((prev) => [
               ...prev,
               {
@@ -185,7 +191,7 @@ export default function ChatScreen() {
           streamingIdRef.current = null;
         },
         {
-          assessmentData,
+          assessmentData: enrichedAssessmentData,
           assessmentHistory,
           recentMoods,
           recentHabits,
@@ -193,7 +199,6 @@ export default function ChatScreen() {
       );
     } catch {
       setShowTypingIndicator(false);
-      // Guaranteed warm fallback — never crashes
       const fallbackMessage: Message = {
         id: streamingId,
         role: 'assistant',
@@ -202,7 +207,6 @@ export default function ChatScreen() {
         isStreaming: false,
       };
       setMessages((prev) => {
-        // Replace streaming message if it exists, otherwise add fallback
         const hasStreaming = prev.some((m) => m.id === streamingId);
         if (hasStreaming) {
           return prev.map((m) => m.id === streamingId ? fallbackMessage : m);
@@ -248,6 +252,13 @@ export default function ChatScreen() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Wellness Score Badge */}
+            {assessmentData?.overall_score != null && (
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-primary/10 border border-primary/20">
+                <span className="text-[10px] font-semibold font-heading text-muted-foreground uppercase tracking-wide">Score</span>
+                <span className="text-xs font-bold font-heading text-primary">{assessmentData.overall_score}/100</span>
+              </div>
+            )}
             <button
               onClick={() => setShowContext(!showContext)}
               className={cn(
