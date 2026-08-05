@@ -2,1204 +2,660 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Link from 'next/link';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface AssessmentAnswer {
-  questionId: number;
-  value: number;
+interface ChatMessage {
+  sender: 'mira' | 'user';
+  text: string;
 }
 
-interface MoodOption {
-  label: string;
+interface MoodEntry {
+  day: string;
+  mood: string;
   emoji: string;
-  color: string;
-  bg: string;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const ASSESSMENT_QUESTIONS = [
-  {
-    id: 1,
-    category: 'Stress',
-    question: 'How would you rate your stress level over the past week?',
-    low: 'Very Low',
-    high: 'Very High',
-  },
-  {
-    id: 2,
-    category: 'Sleep',
-    question: 'How satisfied are you with the quality of your sleep?',
-    low: 'Very Poor',
-    high: 'Excellent',
-  },
-  {
-    id: 3,
-    category: 'Emotional Load',
-    question: 'How heavy does your emotional load feel right now?',
-    low: 'Very Light',
-    high: 'Overwhelming',
-  },
-  {
-    id: 4,
-    category: 'Energy',
-    question: 'How would you describe your overall energy levels today?',
-    low: 'Depleted',
-    high: 'Vibrant',
-  },
-  {
-    id: 5,
-    category: 'Connection',
-    question: 'How connected do you feel to the people around you?',
-    low: 'Isolated',
-    high: 'Deeply Connected',
-  },
-];
-
-const MOOD_OPTIONS: MoodOption[] = [
-  { label: 'Calm', emoji: '🌿', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-  { label: 'Grateful', emoji: '✨', color: '#6ee7b7', bg: 'rgba(110,231,183,0.12)' },
-  { label: 'Anxious', emoji: '🌀', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-  { label: 'Overwhelmed', emoji: '🌊', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
-  { label: 'Exhausted', emoji: '🌙', color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
-  { label: 'Hopeful', emoji: '🌅', color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
-  { label: 'Sad', emoji: '🌧️', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
-  { label: 'Energised', emoji: '⚡', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' },
-];
-
-const AI_REFLECTIONS = [
-  "Thank you for sharing that with me. What you're feeling is completely valid — the weight you're carrying deserves to be acknowledged, not rushed past. Take a slow breath. You don't have to solve everything today. One small, gentle step is enough.",
-  "I hear you. The courage it takes to put these feelings into words is real and meaningful. You are not alone in this. Consider what your body needs right now — rest, water, a moment of stillness. You are doing better than you think.",
-  "Your words carry so much honesty. That kind of self-awareness is a quiet strength. Whatever you're navigating, remember that difficult seasons pass. Be as kind to yourself today as you would be to someone you deeply love.",
-  "What you've written reflects a mind that is working hard to process and understand. That's not weakness — it's wisdom in motion. Give yourself permission to feel without judgment. You are safe here.",
-];
-
-const BREATHING_PHASES = [
-  { label: 'Inhale', duration: 4000, scale: 1.6 },
-  { label: 'Hold', duration: 2000, scale: 1.6 },
-  { label: 'Exhale', duration: 6000, scale: 1.0 },
-  { label: 'Rest', duration: 2000, scale: 1.0 },
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function computeWellnessScore(answers: AssessmentAnswer[]): number {
-  if (answers.length === 0) return 0;
-  // Invert stress and emotional load (lower is better)
-  const invertIds = new Set([1, 3]);
-  const total = answers.reduce((sum, a) => {
-    const val = invertIds.has(a.questionId) ? 11 - a.value : a.value;
-    return sum + val;
-  }, 0);
-  return Math.round((total / (answers.length * 10)) * 100);
+interface JournalEntry {
+  date: string;
+  snippet: string;
+  tag: string;
 }
 
-function scoreLabel(score: number): { label: string; color: string } {
-  if (score >= 75) return { label: 'Thriving', color: '#10b981' };
-  if (score >= 55) return { label: 'Balanced', color: '#6ee7b7' };
-  if (score >= 35) return { label: 'Navigating', color: '#f59e0b' };
-  return { label: 'Needs Care', color: '#f87171' };
+interface Habit {
+  name: string;
+  done: boolean;
+  streak: number;
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-// Wellness Assessment
-function WellnessAssessment() {
-  const [step, setStep] = useState(0); // 0 = intro, 1-5 = questions, 6 = result
-  const [answers, setAnswers] = useState<AssessmentAnswer[]>([]);
-  const [selected, setSelected] = useState<number | null>(null);
-
-  const currentQ = ASSESSMENT_QUESTIONS[step - 1];
-  const isIntro = step === 0;
-  const isDone = step > ASSESSMENT_QUESTIONS.length;
-  const score = computeWellnessScore(answers);
-  const { label, color } = scoreLabel(score);
-
-  const handleNext = () => {
-    if (step > 0 && step <= ASSESSMENT_QUESTIONS.length && selected !== null) {
-      setAnswers((prev) => [...prev, { questionId: currentQ.id, value: selected }]);
-    }
-    setSelected(null);
-    setStep((s) => s + 1);
-  };
-
-  const handleReset = () => {
-    setStep(0);
-    setAnswers([]);
-    setSelected(null);
-  };
-
-  return (
-    <div className="space-y-6">
-      <AnimatePresence mode="wait">
-        {isIntro && (
-          <motion.div
-            key="intro"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-            className="text-center space-y-5 py-4"
-          >
-            <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center text-2xl"
-              style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}>
-              🧭
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-2">Wellness Assessment</h3>
-              <p className="text-sm text-neutral-400 leading-relaxed max-w-sm mx-auto">
-                A gentle 5-question check-in to understand where you are right now. There are no right or wrong answers.
-              </p>
-            </div>
-            <button
-              onClick={handleNext}
-              className="px-7 py-3 rounded-2xl text-sm font-semibold text-white transition-all"
-              style={{ background: 'linear-gradient(135deg, #059669, #10b981)', boxShadow: '0 4px 20px rgba(16,185,129,0.3)' }}
-            >
-              Begin Check-In
-            </button>
-          </motion.div>
-        )}
-
-        {!isIntro && !isDone && currentQ && (
-          <motion.div
-            key={`q-${step}`}
-            initial={{ opacity: 0, x: 24 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -24 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-            className="space-y-6"
-          >
-            {/* Progress */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-neutral-500">
-                <span className="font-mono">{currentQ.category}</span>
-                <span>{step} / {ASSESSMENT_QUESTIONS.length}</span>
-              </div>
-              <div className="h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                <motion.div
-                  className="h-full rounded-full"
-                  style={{ background: 'linear-gradient(90deg, #059669, #10b981)' }}
-                  initial={{ width: `${((step - 1) / ASSESSMENT_QUESTIONS.length) * 100}%` }}
-                  animate={{ width: `${(step / ASSESSMENT_QUESTIONS.length) * 100}%` }}
-                  transition={{ duration: 0.4 }}
-                />
-              </div>
-            </div>
-
-            <p className="text-base font-medium text-white leading-relaxed">{currentQ.question}</p>
-
-            {/* Rating Scale */}
-            <div className="space-y-3">
-              <div className="flex gap-2 justify-between">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((val) => (
-                  <button
-                    key={val}
-                    onClick={() => setSelected(val)}
-                    className="flex-1 h-10 rounded-xl text-sm font-semibold transition-all duration-200"
-                    style={{
-                      background: selected === val ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.04)',
-                      border: selected === val ? '1px solid rgba(16,185,129,0.5)' : '1px solid rgba(255,255,255,0.08)',
-                      color: selected === val ? '#fff' : '#6b7280',
-                      transform: selected === val ? 'scale(1.08)' : 'scale(1)',
-                      boxShadow: selected === val ? '0 4px 16px rgba(16,185,129,0.25)' : 'none',
-                    }}
-                  >
-                    {val}
-                  </button>
-                ))}
-              </div>
-              <div className="flex justify-between text-xs text-neutral-500">
-                <span>{currentQ.low}</span>
-                <span>{currentQ.high}</span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleNext}
-              disabled={selected === null}
-              className="w-full py-3 rounded-2xl text-sm font-semibold text-white transition-all"
-              style={{
-                background: selected !== null ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.06)',
-                color: selected !== null ? '#fff' : '#6b7280',
-                cursor: selected !== null ? 'pointer' : 'not-allowed',
-              }}
-            >
-              {step === ASSESSMENT_QUESTIONS.length ? 'See My Results' : 'Next Question →'}
-            </button>
-          </motion.div>
-        )}
-
-        {isDone && (
-          <motion.div
-            key="result"
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="space-y-6 text-center"
-          >
-            <div className="space-y-3">
-              <p className="text-xs uppercase tracking-widest font-mono text-neutral-500">Your Wellness Score</p>
-              <div className="relative w-28 h-28 mx-auto">
-                <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                  <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
-                  <motion.circle
-                    cx="50" cy="50" r="40" fill="none"
-                    stroke={color} strokeWidth="8"
-                    strokeLinecap="round"
-                    strokeDasharray={`${2 * Math.PI * 40}`}
-                    initial={{ strokeDashoffset: 2 * Math.PI * 40 }}
-                    animate={{ strokeDashoffset: 2 * Math.PI * 40 * (1 - score / 100) }}
-                    transition={{ duration: 1.2, ease: 'easeOut' }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-bold text-white">{score}</span>
-                  <span className="text-[10px] text-neutral-400 font-mono">/ 100</span>
-                </div>
-              </div>
-              <div>
-                <p className="text-xl font-bold" style={{ color }}>{label}</p>
-                <p className="text-sm text-neutral-400 mt-1 max-w-xs mx-auto leading-relaxed">
-                  {score >= 75
-                    ? 'You\'re in a good place. Keep nurturing what\'s working.'
-                    : score >= 55
-                    ? 'You\'re finding your balance. Small consistent steps matter.'
-                    : score >= 35
-                    ? 'You\'re navigating something real. Be gentle with yourself.' :'Your wellbeing needs attention. You deserve care and rest.'}
-                </p>
-              </div>
-            </div>
-
-            {/* Per-category breakdown */}
-            <div className="space-y-2 text-left">
-              {answers.map((a, i) => {
-                const q = ASSESSMENT_QUESTIONS[i];
-                const invertIds = new Set([1, 3]);
-                const normalized = invertIds.has(q.id) ? 11 - a.value : a.value;
-                const pct = (normalized / 10) * 100;
-                return (
-                  <div key={q.id} className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-neutral-400">{q.category}</span>
-                      <span className="text-neutral-500 font-mono">{normalized}/10</span>
-                    </div>
-                    <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                      <motion.div
-                        className="h-full rounded-full"
-                        style={{ background: color }}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pct}%` }}
-                        transition={{ duration: 0.8, delay: i * 0.1 }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={handleReset}
-              className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors font-mono"
-            >
-              Retake Assessment
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+interface User {
+  email: string;
+  name: string;
 }
 
-// Mood Check-In
-function MoodCheckIn() {
-  const [selected, setSelected] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
+type View = 'landing' | 'login' | 'signup' | 'dashboard';
+type Tab = 'mira' | 'dna' | 'mood' | 'journal' | 'habits' | 'toolkit';
 
-  const handleConfirm = () => {
-    if (selected) setConfirmed(true);
-  };
+const fadeVariants = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -12 },
+};
 
-  const handleReset = () => {
-    setSelected(null);
-    setConfirmed(false);
-  };
+const transition = { duration: 0.3, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] };
 
-  return (
-    <div className="space-y-5">
-      <AnimatePresence mode="wait">
-        {!confirmed ? (
-          <motion.div
-            key="picker"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.3 }}
-            className="space-y-5"
-          >
-            <p className="text-sm text-neutral-400 leading-relaxed">
-              How are you feeling right now? Choose what resonates most.
-            </p>
-            <div className="grid grid-cols-4 gap-2.5">
-              {MOOD_OPTIONS.map((mood) => (
-                <motion.button
-                  key={mood.label}
-                  onClick={() => setSelected(mood.label)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.97 }}
-                  className="flex flex-col items-center gap-1.5 p-3 rounded-2xl transition-all duration-200"
-                  style={{
-                    background: selected === mood.label ? mood.bg : 'rgba(255,255,255,0.03)',
-                    border: selected === mood.label
-                      ? `1px solid ${mood.color}50`
-                      : '1px solid rgba(255,255,255,0.07)',
-                    boxShadow: selected === mood.label ? `0 4px 20px ${mood.color}25` : 'none',
-                  }}
-                >
-                  <span className="text-xl">{mood.emoji}</span>
-                  <span className="text-[11px] font-medium" style={{ color: selected === mood.label ? mood.color : '#9ca3af' }}>
-                    {mood.label}
-                  </span>
-                </motion.button>
-              ))}
-            </div>
-            <button
-              onClick={handleConfirm}
-              disabled={!selected}
-              className="w-full py-3 rounded-2xl text-sm font-semibold transition-all"
-              style={{
-                background: selected ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.05)',
-                color: selected ? '#fff' : '#6b7280',
-                cursor: selected ? 'pointer' : 'not-allowed',
-              }}
-            >
-              Log This Feeling
-            </button>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="confirmed"
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-            className="text-center space-y-4 py-4"
-          >
-            {(() => {
-              const mood = MOOD_OPTIONS.find((m) => m.label === selected)!;
-              return (
-                <>
-                  <motion.div
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                    className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center text-3xl"
-                    style={{ background: mood.bg, border: `1px solid ${mood.color}40` }}
-                  >
-                    {mood.emoji}
-                  </motion.div>
-                  <div>
-                    <p className="text-base font-semibold text-white">Feeling <span style={{ color: mood.color }}>{mood.label}</span></p>
-                    <p className="text-sm text-neutral-400 mt-1">Your mood has been logged. Thank you for checking in.</p>
-                  </div>
-                  <div className="p-4 rounded-2xl text-sm text-neutral-300 leading-relaxed text-left"
-                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                    {mood.label === 'Calm' && 'This is a beautiful state to be in. Use this clarity to do something meaningful.'}
-                    {mood.label === 'Grateful' && 'Gratitude is a powerful anchor. Let it guide your next few hours.'}
-                    {mood.label === 'Anxious' && 'Anxiety is your nervous system asking for safety. Try a slow breath — in for 4, out for 6.'}
-                    {mood.label === 'Overwhelmed' && 'When everything feels like too much, do one small thing. Just one.'}
-                    {mood.label === 'Exhausted' && 'Rest is not laziness — it\'s recovery. Give yourself permission to slow down.'}
-                    {mood.label === 'Hopeful' && 'Hope is a quiet strength. Nurture it with small, intentional actions today.'}
-                    {mood.label === 'Sad' && 'Sadness deserves space, not suppression. Be gentle with yourself right now.'}
-                    {mood.label === 'Energised' && 'Channel this energy into something that matters to you. You\'re in a great state.'}
-                  </div>
-                  <button onClick={handleReset} className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors font-mono">
-                    Check in again
-                  </button>
-                </>
-              );
-            })()}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+export default function MindCastPlatform() {
+  // Navigation & Auth State
+  const [currentView, setCurrentView] = useState<View>('landing');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-// Journal + AI Reflection
-function JournalReflection() {
-  const [text, setText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [reflection, setReflection] = useState<string | null>(null);
-  const [loadingDot, setLoadingDot] = useState(0);
+  // Dashboard Tab State
+  const [activeTab, setActiveTab] = useState<Tab>('mira');
 
+  // MIRA AI Chat State
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    { sender: 'mira', text: "Hello! I'm MIRA, your Mind Intelligence & Reflective Assistant. How are you feeling right now?" }
+  ]);
+  const [userInput, setUserInput] = useState('');
+  const [isMiraTyping, setIsMiraTyping] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Wellness DNA State
+  const [dnaData] = useState({
+    wellnessScore: 84,
+    stress: 'Low-Moderate',
+    anxiety: 'Managed',
+    happiness: 'High',
+    motivation: 'Strong',
+    burnoutRisk: 'Minimal'
+  });
+
+  // Mood Tracker State
+  const [selectedMood, setSelectedMood] = useState('Calm');
+  const [moodHistory] = useState<MoodEntry[]>([
+    { day: 'Mon', mood: 'Happy', emoji: '😊' },
+    { day: 'Tue', mood: 'Calm', emoji: '🌿' },
+    { day: 'Wed', mood: 'Stressed', emoji: '🌊' },
+    { day: 'Thu', mood: 'Excited', emoji: '✨' },
+    { day: 'Fri', mood: 'Calm', emoji: '🌿' },
+  ]);
+
+  // Journal State
+  const [journalText, setJournalText] = useState('');
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([
+    { date: 'Aug 4, 2026', snippet: 'Felt grounded today after finishing the core UI specs.', tag: 'Productive' }
+  ]);
+
+  // Habit Tracker State
+  const [habits, setHabits] = useState<Habit[]>([
+    { name: 'Water Intake (2L)', done: true, streak: 5 },
+    { name: '10 Min Meditation', done: false, streak: 3 },
+    { name: 'Sleep 8 Hours', done: true, streak: 7 },
+    { name: 'Daily Journaling', done: false, streak: 2 }
+  ]);
+
+  // Auto-scroll chat
   useEffect(() => {
-    if (!isLoading) return;
-    const interval = setInterval(() => setLoadingDot((d) => (d + 1) % 3), 500);
-    return () => clearInterval(interval);
-  }, [isLoading]);
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, isMiraTyping]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleAuthSubmit = (e: React.FormEvent, _type: string) => {
     e.preventDefault();
-    if (!text.trim()) return;
-    setIsLoading(true);
-    setReflection(null);
+    if (!authEmail) return;
+    setCurrentUser({ email: authEmail, name: authEmail.split('@')[0] });
+    setCurrentView('dashboard');
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userInput.trim()) return;
+
+    const newMsg: ChatMessage = { sender: 'user', text: userInput };
+    setChatMessages(prev => [...prev, newMsg]);
+    setUserInput('');
+    setIsMiraTyping(true);
+
     setTimeout(() => {
-      const idx = Math.floor(Math.random() * AI_REFLECTIONS.length);
-      setReflection(AI_REFLECTIONS[idx]);
-      setIsLoading(false);
-    }, 2800);
-  };
-
-  const handleReset = () => {
-    setText('');
-    setReflection(null);
-    setIsLoading(false);
-  };
-
-  return (
-    <div className="space-y-5">
-      <AnimatePresence mode="wait">
-        {!reflection && !isLoading && (
-          <motion.form
-            key="form"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.3 }}
-            onSubmit={handleSubmit}
-            className="space-y-4"
-          >
-            <p className="text-sm text-neutral-400 leading-relaxed">
-              This is your private space. Write freely — no judgment, no audience.
-            </p>
-            <textarea
-              rows={6}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="What's on your mind today? How are you really feeling?..."
-              className="w-full rounded-2xl p-4 text-sm text-white leading-relaxed resize-none focus:outline-none transition-all"
-              style={{
-                background: 'rgba(0,0,0,0.35)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                color: '#f5f5f5',
-              }}
-              onFocus={(e) => { e.target.style.borderColor = 'rgba(16,185,129,0.4)'; e.target.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.08)'; }}
-              onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none'; }}
-            />
-            <button
-              type="submit"
-              disabled={!text.trim()}
-              className="w-full py-3 rounded-2xl text-sm font-semibold transition-all"
-              style={{
-                background: text.trim() ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.05)',
-                color: text.trim() ? '#fff' : '#6b7280',
-                cursor: text.trim() ? 'pointer' : 'not-allowed',
-              }}
-            >
-              Receive Compassionate Reflection
-            </button>
-          </motion.form>
-        )}
-
-        {isLoading && (
-          <motion.div
-            key="loading"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="flex flex-col items-center justify-center py-12 space-y-5"
-          >
-            <div className="relative w-12 h-12">
-              <motion.div
-                className="absolute inset-0 rounded-full"
-                style={{ border: '2px solid rgba(16,185,129,0.2)' }}
-              />
-              <motion.div
-                className="absolute inset-0 rounded-full"
-                style={{ border: '2px solid transparent', borderTopColor: '#10b981' }}
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-              />
-            </div>
-            <div className="text-center space-y-1">
-              <p className="text-sm font-medium text-white">
-                Reading your words with care
-                <span className="inline-flex gap-0.5 ml-1">
-                  {[0, 1, 2].map((i) => (
-                    <motion.span
-                      key={i}
-                      className="w-1 h-1 rounded-full inline-block"
-                      style={{ background: '#10b981' }}
-                      animate={{ opacity: loadingDot === i ? 1 : 0.2 }}
-                      transition={{ duration: 0.2 }}
-                    />
-                  ))}
-                </span>
-              </p>
-              <p className="text-xs text-neutral-500 font-mono">Crafting a compassionate response</p>
-            </div>
-          </motion.div>
-        )}
-
-        {reflection && !isLoading && (
-          <motion.div
-            key="reflection"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            className="space-y-4"
-          >
-            <div className="p-5 rounded-2xl space-y-3"
-              style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(6,78,59,0.06))', border: '1px solid rgba(16,185,129,0.2)' }}>
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base"
-                  style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)' }}>
-                  🌿
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-emerald-400">Compassionate Reflection</p>
-                  <p className="text-[11px] text-neutral-500 font-mono">AI-generated · for you</p>
-                </div>
-              </div>
-              <p className="text-sm text-neutral-200 leading-relaxed">{reflection}</p>
-            </div>
-
-            <div className="p-4 rounded-2xl"
-              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <p className="text-xs text-neutral-500 leading-relaxed italic">
-                "{text.length > 120 ? text.slice(0, 120) + '…' : text}"
-              </p>
-            </div>
-
-            <button onClick={handleReset} className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors font-mono">
-              Write another entry
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// Breathing Exercise
-function BreathingExercise() {
-  const [isActive, setIsActive] = useState(false);
-  const [phaseIndex, setPhaseIndex] = useState(0);
-  const [cycleCount, setCycleCount] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const currentPhase = BREATHING_PHASES[phaseIndex];
-
-  useEffect(() => {
-    if (!isActive) return;
-    timerRef.current = setTimeout(() => {
-      const next = (phaseIndex + 1) % BREATHING_PHASES.length;
-      if (next === 0) setCycleCount((c) => c + 1);
-      setPhaseIndex(next);
-    }, currentPhase.duration);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [isActive, phaseIndex, currentPhase.duration]);
-
-  const handleToggle = () => {
-    if (isActive) {
-      setIsActive(false);
-      setPhaseIndex(0);
-    } else {
-      setIsActive(true);
-      setPhaseIndex(0);
-    }
-  };
-
-  return (
-    <div className="flex flex-col items-center space-y-8 py-4">
-      <div className="text-center space-y-1">
-        <p className="text-sm text-neutral-400">
-          {isActive ? 'Follow the circle. Let your breath guide you.' : 'A guided breathing exercise to calm your nervous system.'}
-        </p>
-        {cycleCount > 0 && (
-          <p className="text-xs text-emerald-400 font-mono">{cycleCount} cycle{cycleCount !== 1 ? 's' : ''} completed</p>
-        )}
-      </div>
-
-      {/* Visualizer */}
-      <div className="relative flex items-center justify-center" style={{ width: 200, height: 200 }}>
-        {/* Outer glow rings */}
-        {isActive && (
-          <>
-            <motion.div
-              className="absolute rounded-full"
-              style={{ background: 'rgba(16,185,129,0.04)', width: 200, height: 200 }}
-              animate={{ scale: currentPhase.scale * 1.15, opacity: [0.3, 0.6, 0.3] }}
-              transition={{ duration: currentPhase.duration / 1000, ease: 'easeInOut' }}
-            />
-            <motion.div
-              className="absolute rounded-full"
-              style={{ background: 'rgba(16,185,129,0.07)', width: 160, height: 160 }}
-              animate={{ scale: currentPhase.scale * 1.05 }}
-              transition={{ duration: currentPhase.duration / 1000, ease: 'easeInOut' }}
-            />
-          </>
-        )}
-
-        {/* Main circle */}
-        <motion.div
-          className="rounded-full flex items-center justify-center cursor-pointer select-none"
-          style={{
-            width: 120,
-            height: 120,
-            background: isActive
-              ? 'radial-gradient(circle, rgba(16,185,129,0.35) 0%, rgba(5,150,105,0.2) 60%, transparent 100%)'
-              : 'radial-gradient(circle, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
-            border: isActive ? '1.5px solid rgba(16,185,129,0.5)' : '1.5px solid rgba(255,255,255,0.1)',
-            boxShadow: isActive ? '0 0 40px rgba(16,185,129,0.2)' : 'none',
-          }}
-          animate={isActive ? { scale: currentPhase.scale } : { scale: 1 }}
-          transition={isActive ? { duration: currentPhase.duration / 1000, ease: 'easeInOut' } : { duration: 0.3 }}
-          onClick={handleToggle}
-        >
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={isActive ? currentPhase.label : 'idle'}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: 0.25 }}
-              className="text-center"
-            >
-              {isActive ? (
-                <>
-                  <p className="text-sm font-semibold text-emerald-300">{currentPhase.label}</p>
-                  <p className="text-xs text-emerald-400/60 font-mono">{currentPhase.duration / 1000}s</p>
-                </>
-              ) : (
-                <p className="text-xs text-neutral-400">Tap to begin</p>
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </motion.div>
-      </div>
-
-      {/* Phase indicators */}
-      <div className="flex gap-3">
-        {BREATHING_PHASES.map((phase, i) => (
-          <div key={phase.label} className="flex flex-col items-center gap-1">
-            <motion.div
-              className="w-2 h-2 rounded-full"
-              style={{ background: isActive && phaseIndex === i ? '#10b981' : 'rgba(255,255,255,0.12)' }}
-              animate={isActive && phaseIndex === i ? { scale: [1, 1.4, 1] } : { scale: 1 }}
-              transition={{ duration: 0.6, repeat: isActive && phaseIndex === i ? Infinity : 0 }}
-            />
-            <span className="text-[10px] font-mono" style={{ color: isActive && phaseIndex === i ? '#10b981' : '#6b7280' }}>
-              {phase.label}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <button
-        onClick={handleToggle}
-        className="px-7 py-2.5 rounded-2xl text-sm font-semibold transition-all"
-        style={{
-          background: isActive ? 'rgba(255,255,255,0.06)' : 'linear-gradient(135deg, #059669, #10b981)',
-          border: isActive ? '1px solid rgba(255,255,255,0.1)' : 'none',
-          color: '#fff',
-          boxShadow: isActive ? 'none' : '0 4px 20px rgba(16,185,129,0.3)',
-        }}
-      >
-        {isActive ? 'Stop Exercise' : 'Start Breathing'}
-      </button>
-    </div>
-  );
-}
-
-// ─── Dashboard Tab ─────────────────────────────────────────────────────────────
-type DashTab = 'assessment' | 'mood' | 'journal' | 'breathing';
-
-const DASH_TABS: { id: DashTab; label: string; emoji: string }[] = [
-  { id: 'assessment', label: 'Wellness Check', emoji: '🧭' },
-  { id: 'mood', label: 'Mood Check-In', emoji: '🌿' },
-  { id: 'journal', label: 'Journal', emoji: '📖' },
-  { id: 'breathing', label: 'Breathe', emoji: '🫁' },
-];
-
-function Dashboard() {
-  const [activeTab, setActiveTab] = useState<DashTab>('assessment');
-
-  return (
-    <section id="sanctuary" className="px-6 lg:px-16 py-20 max-w-5xl mx-auto">
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="text-center mb-12"
-      >
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono mb-5"
-          style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#6ee7b7' }}>
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          Interactive Sanctuary
-        </div>
-        <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-3">Your wellness workspace.</h2>
-        <p className="text-neutral-400 text-sm max-w-md mx-auto leading-relaxed">
-          Four tools, one calm space. Check in with yourself whenever you need to.
-        </p>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-        className="rounded-3xl overflow-hidden"
-        style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.07)' }}
-      >
-        {/* Tab Bar */}
-        <div className="flex border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-          {DASH_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className="flex-1 flex flex-col sm:flex-row items-center justify-center gap-1.5 py-4 px-3 text-xs font-medium transition-all duration-200 relative"
-              style={{ color: activeTab === tab.id ? '#10b981' : '#6b7280' }}
-            >
-              <span className="text-base sm:text-sm">{tab.emoji}</span>
-              <span className="hidden sm:inline">{tab.label}</span>
-              {activeTab === tab.id && (
-                <motion.div
-                  layoutId="tab-indicator"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
-                  style={{ background: 'linear-gradient(90deg, #059669, #10b981)' }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-                />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab Content */}
-        <div className="p-6 sm:p-8 min-h-[420px]">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            >
-              {activeTab === 'assessment' && <WellnessAssessment />}
-              {activeTab === 'mood' && <MoodCheckIn />}
-              {activeTab === 'journal' && <JournalReflection />}
-              {activeTab === 'breathing' && <BreathingExercise />}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </motion.div>
-    </section>
-  );
-}
-
-// ─── Main Page ─────────────────────────────────────────────────────────────────
-export default function MindCastLanding() {
-  const [scrolled, setScrolled] = useState(false);
-  const [showSanctuary, setShowSanctuary] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const handleOpenSanctuary = () => {
-    setShowSanctuary(true);
-    setTimeout(() => {
-      document.getElementById('sanctuary')?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
-  };
-
-  return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: '#09090b',
-        color: '#f5f5f5',
-        fontFamily: "'Plus Jakarta Sans', 'DM Sans', sans-serif",
-        overflowX: 'hidden',
-      }}
-    >
-      {/* Google Font */}
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-        * { box-sizing: border-box; }
-        ::selection { background: rgba(16,185,129,0.25); color: #d1fae5; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-        textarea::placeholder { color: rgba(255,255,255,0.2) !important; }
-      `}</style>
-
-      {/* Ambient background orbs */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-        <div style={{
-          position: 'absolute', top: '-10rem', left: '-8rem',
-          width: 700, height: 700, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(16,185,129,0.07) 0%, transparent 65%)',
-          animation: 'orbFloat 22s ease-in-out infinite',
-        }} />
-        <div style={{
-          position: 'absolute', bottom: '-6rem', right: '-8rem',
-          width: 600, height: 600, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(20,184,166,0.06) 0%, transparent 65%)',
-          animation: 'orbFloat 28s ease-in-out infinite reverse',
-        }} />
-        <div style={{
-          position: 'absolute', top: '40%', left: '50%', transform: 'translate(-50%,-50%)',
-          width: 400, height: 400, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(52,211,153,0.04) 0%, transparent 70%)',
-        }} />
-      </div>
-      <style>{`
-        @keyframes orbFloat {
-          0%, 100% { transform: translate(0,0) scale(1); }
-          50% { transform: translate(30px, 40px) scale(1.06); }
+      setIsMiraTyping(false);
+      setChatMessages(prev => [
+        ...prev,
+        {
+          sender: 'mira',
+          text: `I hear you. Based on what you shared, let's take a slow breath together. Remember that consistency beats intensity. How can I help you adjust your focus right now?`
         }
-      `}</style>
+      ]);
+    }, 1400);
+  };
 
-      {/* ── NAVBAR ── */}
-      <nav
-        style={{
-          position: 'sticky', top: 0, zIndex: 50,
-          backdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'blur(12px)',
-          WebkitBackdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'blur(12px)',
-          background: scrolled ? 'rgba(9,9,11,0.88)' : 'rgba(9,9,11,0.6)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          transition: 'background 0.3s ease, backdrop-filter 0.3s ease',
-        }}
-      >
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 12,
-              background: 'linear-gradient(135deg, #059669, #10b981, #34d399)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 800, color: '#fff', fontSize: 16,
-              boxShadow: '0 4px 16px rgba(16,185,129,0.35)',
-            }}>M</div>
-            <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-0.02em', color: '#fff' }}>MindCast</span>
+  const toggleHabit = (index: number) => {
+    const updated = [...habits];
+    updated[index] = { ...updated[index], done: !updated[index].done };
+    setHabits(updated);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#09090b] text-neutral-100 font-sans selection:bg-emerald-500/30 selection:text-emerald-200 antialiased">
+
+      {/* ================================================================== */}
+      {/* NAVIGATION BAR                                                      */}
+      {/* ================================================================== */}
+      <nav className="sticky top-0 z-50 backdrop-blur-2xl bg-[#09090b]/85 border-b border-white/[0.06] px-6 lg:px-12 py-4 flex items-center justify-between">
+        <div
+          className="flex items-center gap-3 cursor-pointer group"
+          onClick={() => setCurrentView(currentUser ? 'dashboard' : 'landing')}
+        >
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-emerald-400 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
+            M
           </div>
-
-          {/* Nav links */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
-            <a href="#features" style={{ fontSize: 13, color: '#9ca3af', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#9ca3af')}>
-              Features
-            </a>
-            <a href="#sanctuary" style={{ fontSize: 13, color: '#9ca3af', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#9ca3af')}>
-              Sanctuary
-            </a>
-            <Link href="/dashboard" style={{ fontSize: 13, color: '#9ca3af', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#9ca3af')}>
-              Dashboard
-            </Link>
+          <div>
+            <span className="font-bold tracking-tight text-base text-white">MindCast</span>
+            <span className="block text-[10px] text-emerald-400 font-mono tracking-widest uppercase">AI Wellness OS</span>
           </div>
+        </div>
 
-          {/* CTA */}
-          <button
-            onClick={handleOpenSanctuary}
-            style={{
-              padding: '10px 22px', borderRadius: 999, fontSize: 13, fontWeight: 600,
-              background: 'linear-gradient(135deg, #059669, #10b981)',
-              color: '#fff', border: 'none', cursor: 'pointer',
-              boxShadow: '0 4px 20px rgba(16,185,129,0.35)',
-              transition: 'opacity 0.2s, transform 0.2s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
-          >
-            Open Sanctuary
-          </button>
+        {currentView === 'landing' && (
+          <div className="hidden md:flex items-center gap-8 text-sm text-neutral-400 font-medium">
+            <a href="#features" className="hover:text-white transition-colors">Features</a>
+            <a href="#mira-section" className="hover:text-white transition-colors">MIRA AI</a>
+            <a href="#dna-section" className="hover:text-white transition-colors">Wellness DNA</a>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3">
+          {currentView === 'landing' && (
+            <>
+              <button
+                onClick={() => setCurrentView('login')}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white transition-all"
+              >
+                Log In
+              </button>
+              <button
+                onClick={() => setCurrentView('signup')}
+                className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-500 text-black hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
+              >
+                Get Started
+              </button>
+            </>
+          )}
+
+          {currentView === 'dashboard' && (
+            <div className="flex items-center gap-4">
+              <span className="text-xs text-neutral-400 font-mono hidden sm:inline">
+                Connected as <strong className="text-emerald-300">{currentUser?.email}</strong>
+              </span>
+              <button
+                onClick={() => { setCurrentUser(null); setCurrentView('landing'); }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/[0.04] hover:bg-white/[0.08] text-neutral-300 border border-white/10 transition-all"
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
-      {/* ── HERO ── */}
-      <section style={{ position: 'relative', zIndex: 1, maxWidth: 1200, margin: '0 auto', padding: '100px 24px 80px', textAlign: 'center' }}>
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '6px 16px', borderRadius: 999, marginBottom: 28,
-            background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)',
-            fontSize: 12, color: '#6ee7b7', fontFamily: 'monospace',
-          }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', display: 'inline-block', animation: 'pulse 2s ease-in-out infinite' }} />
-            Your mental health sanctuary
-          </div>
+      {/* ================================================================== */}
+      {/* VIEW ROUTER                                                         */}
+      {/* ================================================================== */}
+      <AnimatePresence mode="wait">
 
-          <h1 style={{
-            fontSize: 'clamp(2.4rem, 6vw, 4.5rem)',
-            fontWeight: 800, letterSpacing: '-0.03em',
-            lineHeight: 1.08, color: '#fff', marginBottom: 24,
-            maxWidth: 780, margin: '0 auto 24px',
-          }}>
-            Find stillness in the{' '}
-            <span style={{
-              background: 'linear-gradient(135deg, #10b981, #34d399, #6ee7b7)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}>
-              noise of everyday life.
-            </span>
-          </h1>
+        {/* LANDING PAGE */}
+        {currentView === 'landing' && (
+          <motion.div key="landing" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition}>
+            <section className="relative px-6 lg:px-12 pt-32 pb-24 max-w-5xl mx-auto text-center flex flex-col items-center">
+              <div className="absolute inset-0 -z-10 flex items-center justify-center pointer-events-none">
+                <div className="w-[600px] h-[600px] bg-emerald-600/10 rounded-full blur-[150px]" />
+              </div>
 
-          <p style={{
-            fontSize: 16, color: '#9ca3af', maxWidth: 520, margin: '0 auto 44px',
-            lineHeight: 1.75, fontWeight: 400,
-          }}>
-            MindCast is a calm, private space for emotional check-ins, guided breathing, reflective journaling, and compassionate AI support — built for real humans navigating real life.
-          </p>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.03] border border-white/10 text-xs text-emerald-300 mb-8 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Meet MIRA • Your Personal AI Mental Wellness OS
+              </div>
 
-          <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <motion.button
-              whileHover={{ scale: 1.03, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleOpenSanctuary}
-              style={{
-                padding: '14px 32px', borderRadius: 16, fontSize: 14, fontWeight: 600,
-                background: 'linear-gradient(135deg, #059669, #10b981)',
-                color: '#fff', border: 'none', cursor: 'pointer',
-                boxShadow: '0 8px 32px rgba(16,185,129,0.35)',
-              }}
-            >
-              Open Sanctuary
-            </motion.button>
-            <motion.a
-              href="#features"
-              whileHover={{ scale: 1.02 }}
-              style={{
-                padding: '14px 32px', borderRadius: 16, fontSize: 14, fontWeight: 500,
-                background: 'rgba(255,255,255,0.04)', color: '#d1d5db',
-                border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
-                textDecoration: 'none', display: 'inline-block',
-              }}
-            >
-              Explore Features
-            </motion.a>
-          </div>
-        </motion.div>
+              <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-4xl text-white leading-[1.08] mb-6">
+                Master your mind with{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-white">
+                  intelligent balance
+                </span>.
+              </h1>
 
-        {/* Hero visual card */}
-        <motion.div
-          initial={{ opacity: 0, y: 40, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          style={{ marginTop: 64, maxWidth: 680, margin: '64px auto 0' }}
-        >
-          <div style={{
-            borderRadius: 24, padding: 28,
-            background: 'rgba(255,255,255,0.025)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            backdropFilter: 'blur(20px)',
-            boxShadow: '0 32px 80px rgba(0,0,0,0.4)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#f87171' }} />
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#fbbf24' }} />
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#34d399' }} />
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7280', fontFamily: 'monospace' }}>mindcast · sanctuary</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {[
-                { label: 'Wellness Score', value: '78', unit: '/ 100', color: '#10b981', emoji: '🧭' },
-                { label: 'Current Mood', value: 'Calm', unit: '', color: '#34d399', emoji: '🌿' },
-                { label: 'Journal Streak', value: '7', unit: 'days', color: '#6ee7b7', emoji: '📖' },
-                { label: 'Breathing Sessions', value: '3', unit: 'today', color: '#a7f3d0', emoji: '🫁' },
-              ].map((item) => (
-                <div key={item.label} style={{
-                  padding: '16px 18px', borderRadius: 16,
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                    <span style={{ fontSize: 14 }}>{item.emoji}</span>
-                    <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>{item.label}</span>
+              <p className="text-neutral-400 text-base sm:text-lg max-w-2xl mb-12 font-normal leading-relaxed">
+                MindCast combines conversational AI, emotional analytics, habit tracking, and clinical wellness DNA profiling into one unified operating system.
+              </p>
+
+              <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
+                <button
+                  onClick={() => setCurrentView('signup')}
+                  className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium hover:opacity-95 transition-all shadow-xl shadow-emerald-600/25 border border-emerald-400/20 text-sm"
+                >
+                  Start Your Journey Free
+                </button>
+                <button
+                  onClick={() => setCurrentView('login')}
+                  className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] text-neutral-300 border border-white/10 font-medium transition-all text-sm"
+                >
+                  Log Into Account
+                </button>
+              </div>
+            </section>
+
+            {/* Features Section */}
+            <section id="features" className="px-6 lg:px-12 py-24 max-w-5xl mx-auto border-t border-white/[0.04]">
+              <div className="text-center mb-16">
+                <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-3">Everything your mind needs.</h2>
+                <p className="text-neutral-400 text-sm">A complete wellness operating system built for modern mental health.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                  { num: '01', title: 'MIRA AI Chat', desc: 'Conversational AI companion with long-term memory and contextual emotional insight.' },
+                  { num: '02', title: 'Wellness DNA', desc: 'Deep behavioral profiling derived from your daily check-ins and journaling patterns.' },
+                  { num: '03', title: 'Habit & Mood Tracking', desc: 'Streak-based habit system and emotional timeline to surface patterns over time.' },
+                ].map((f) => (
+                  <div key={f.num} className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] transition-all group relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-6 font-semibold text-sm">{f.num}</div>
+                    <h3 className="text-lg font-semibold text-white mb-2">{f.title}</h3>
+                    <p className="text-sm text-neutral-400 leading-relaxed">{f.desc}</p>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                    <span style={{ fontSize: 22, fontWeight: 700, color: item.color }}>{item.value}</span>
-                    {item.unit && <span style={{ fontSize: 11, color: '#6b7280' }}>{item.unit}</span>}
-                  </div>
+                ))}
+              </div>
+            </section>
+          </motion.div>
+        )}
+
+        {/* LOGIN VIEW */}
+        {currentView === 'login' && (
+          <motion.div key="login" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="max-w-md mx-auto px-6 py-20">
+            <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] backdrop-blur-2xl shadow-2xl space-y-6">
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl font-bold text-white tracking-tight">Welcome Back</h2>
+                <p className="text-xs text-neutral-400">Log in securely with your email to access your workspace.</p>
+              </div>
+
+              <form onSubmit={(e) => handleAuthSubmit(e, 'login')} className="space-y-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-neutral-400 font-semibold mb-2">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
                 </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-neutral-400 font-semibold mb-2">Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-all shadow-lg shadow-emerald-500/20"
+                >
+                  Sign In to MindCast
+                </button>
+              </form>
+
+              <div className="text-center pt-2">
+                <button onClick={() => setCurrentView('signup')} className="text-xs text-neutral-400 hover:text-white transition-colors">
+                  Don&apos;t have an account? <span className="text-emerald-400 underline">Sign up</span>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* SIGNUP VIEW */}
+        {currentView === 'signup' && (
+          <motion.div key="signup" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="max-w-md mx-auto px-6 py-20">
+            <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] backdrop-blur-2xl shadow-2xl space-y-6">
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl font-bold text-white tracking-tight">Create Your Account</h2>
+                <p className="text-xs text-neutral-400">Join MindCast and activate your AI companion MIRA.</p>
+              </div>
+
+              <form onSubmit={(e) => handleAuthSubmit(e, 'signup')} className="space-y-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-neutral-400 font-semibold mb-2">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-neutral-400 font-semibold mb-2">Create Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white font-semibold text-sm transition-all shadow-lg shadow-emerald-600/25"
+                >
+                  Create Account &amp; Launch MIRA
+                </button>
+              </form>
+
+              <div className="text-center pt-2">
+                <button onClick={() => setCurrentView('login')} className="text-xs text-neutral-400 hover:text-white transition-colors">
+                  Already have an account? <span className="text-emerald-400 underline">Log in</span>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* DASHBOARD VIEW */}
+        {currentView === 'dashboard' && (
+          <motion.div key="dashboard" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+
+            {/* SUB-NAVIGATION TABS */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 border-b border-white/[0.06] scrollbar-none">
+              {([
+                { id: 'mira', label: '🤖 MIRA AI Chat' },
+                { id: 'dna', label: '🧬 Wellness DNA' },
+                { id: 'mood', label: '😊 Mood Tracking' },
+                { id: 'journal', label: '📓 Smart Journal' },
+                { id: 'habits', label: '🎯 Habit Tracker' },
+                { id: 'toolkit', label: '❤️ Toolkit' },
+              ] as { id: Tab; label: string }[]).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                    activeTab === tab.id
+                      ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
+                      : 'bg-white/[0.03] text-neutral-400 hover:text-white border border-white/5'
+                  }`}
+                >
+                  {tab.label}
+                </button>
               ))}
             </div>
-          </div>
-        </motion.div>
-      </section>
 
-      {/* ── FEATURES ── */}
-      <section id="features" style={{ position: 'relative', zIndex: 1, maxWidth: 1200, margin: '0 auto', padding: '80px 24px' }}>
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 80 }}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            style={{ textAlign: 'center', marginBottom: 56 }}
-          >
-            <h2 style={{ fontSize: 'clamp(1.6rem, 3vw, 2.4rem)', fontWeight: 700, color: '#fff', letterSpacing: '-0.025em', marginBottom: 12 }}>
-              Designed for your inner world.
-            </h2>
-            <p style={{ fontSize: 14, color: '#6b7280', maxWidth: 400, margin: '0 auto' }}>
-              Every tool built with care, privacy, and emotional intelligence at its core.
-            </p>
-          </motion.div>
+            {/* TAB CONTENT: MIRA AI CHAT */}
+            {activeTab === 'mira' && (
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                {/* Sidebar Info */}
+                <div className="lg:col-span-1 p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-4 h-fit">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold">
+                    🤖
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-sm">MIRA Assistant</h3>
+                    <p className="text-xs text-neutral-400 mt-1">Mind Intelligence &amp; Reflective Assistant with long-term memory and contextual insight.</p>
+                  </div>
+                  <div className="pt-2 border-t border-white/10 space-y-2 text-xs text-neutral-400">
+                    <p className="flex items-center gap-2">🟢 Active Context Engine</p>
+                    <p className="flex items-center gap-2">🔒 End-to-End Encrypted</p>
+                  </div>
+                </div>
 
-          {/* Asymmetric bento grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 16 }}>
-            {/* Large card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.05 }}
-              style={{ gridColumn: 'span 7', padding: '36px 32px', borderRadius: 24, position: 'relative', overflow: 'hidden', cursor: 'default' }}
-              className="feature-card"
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(16,185,129,0.25)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)'; }}
-              whileHover={{ y: -3 }}
-            >
-              <style>{`.feature-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); transition: border-color 0.3s, box-shadow 0.3s; }`}</style>
-              <div style={{ position: 'absolute', top: 0, right: 0, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)', pointerEvents: 'none' }} />
-              <div style={{ width: 44, height: 44, borderRadius: 14, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, marginBottom: 20 }}>🧭</div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 10, letterSpacing: '-0.02em' }}>Multi-Step Wellness Assessment</h3>
-              <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7 }}>A thoughtful 5-question check-in across stress, sleep, emotional load, energy, and connection — generating a personalised wellness score with category breakdowns.</p>
-            </motion.div>
+                {/* Chat Window */}
+                <div className="lg:col-span-3 flex flex-col h-[650px] rounded-3xl bg-white/[0.02] border border-white/[0.08] overflow-hidden backdrop-blur-xl">
+                  {/* Chat Messages */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {chatMessages.map((msg, idx) => (
+                      <div key={idx} className={`flex gap-4 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        {msg.sender === 'mira' && (
+                          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs font-bold flex-shrink-0">
+                            M
+                          </div>
+                        )}
+                        <div className={`max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed ${
+                          msg.sender === 'user' ?'bg-emerald-600 text-white rounded-br-none' :'bg-white/[0.05] border border-white/10 text-neutral-200 rounded-bl-none'
+                        }`}>
+                          {msg.text}
+                        </div>
+                      </div>
+                    ))}
 
-            {/* Stat card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              style={{ gridColumn: 'span 5', padding: '36px 28px', borderRadius: 24, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-              whileHover={{ y: -3 }}
-            >
-              <div style={{ width: 44, height: 44, borderRadius: 14, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, marginBottom: 20 }}>🌿</div>
-              <div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 10, letterSpacing: '-0.02em' }}>Mood Check-In</h3>
-                <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7 }}>Select your emotional state from 8 nuanced options. Each selection returns a grounding micro-reflection tailored to that feeling.</p>
+                    {isMiraTyping && (
+                      <div className="flex gap-4 items-center">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs font-bold">
+                          M
+                        </div>
+                        <div className="p-4 rounded-2xl bg-white/[0.05] border border-white/10 text-neutral-400 text-xs flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> MIRA is reflecting...
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatBottomRef} />
+                  </div>
+
+                  {/* Chat Input Bar */}
+                  <div className="p-4 border-t border-white/[0.06] bg-black/40">
+                    <form onSubmit={handleSendMessage} className="flex gap-3">
+                      <input
+                        type="text"
+                        value={userInput}
+                        onChange={(e) => setUserInput(e.target.value)}
+                        placeholder="Ask MIRA anything or share how you feel..."
+                        className="flex-1 bg-black/60 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                      />
+                      <button
+                        type="submit"
+                        className="px-6 py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-all shadow-lg shadow-emerald-500/20 flex-shrink-0"
+                      >
+                        Send
+                      </button>
+                    </form>
+                  </div>
+                </div>
               </div>
-            </motion.div>
+            )}
 
-            {/* Journal card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.15 }}
-              style={{ gridColumn: 'span 5', padding: '36px 28px', borderRadius: 24, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
-              whileHover={{ y: -3 }}
-            >
-              <div style={{ width: 44, height: 44, borderRadius: 14, background: 'rgba(110,231,183,0.1)', border: '1px solid rgba(110,231,183,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, marginBottom: 20 }}>📖</div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 10, letterSpacing: '-0.02em' }}>Safe Journaling</h3>
-              <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7 }}>A distraction-free writing space. Submit your entry and receive a warm, AI-generated compassionate reflection — no data stored, no judgment.</p>
-            </motion.div>
+            {/* TAB CONTENT: WELLNESS DNA */}
+            {activeTab === 'dna' && (
+              <div className="space-y-6">
+                <div className="p-8 rounded-3xl bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/20">
+                  <span className="text-xs font-mono tracking-widest text-emerald-400 uppercase">🧬 Core Feature</span>
+                  <h2 className="text-2xl font-bold text-white mt-2">Your Wellness DNA Profile</h2>
+                  <p className="text-sm text-neutral-300 mt-1">Deep analysis derived from your daily check-ins, journals, and behavioral patterns.</p>
+                </div>
 
-            {/* Breathing card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              style={{ gridColumn: 'span 7', padding: '36px 32px', borderRadius: 24, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', position: 'relative', overflow: 'hidden' }}
-              whileHover={{ y: -3 }}
-            >
-              <div style={{ position: 'absolute', bottom: -20, right: -20, width: 160, height: 160, borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,0.06) 0%, transparent 70%)', pointerEvents: 'none' }} />
-              <div style={{ width: 44, height: 44, borderRadius: 14, background: 'rgba(167,243,208,0.1)', border: '1px solid rgba(167,243,208,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, marginBottom: 20 }}>🫁</div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 10, letterSpacing: '-0.02em' }}>Guided Breathing Visualizer</h3>
-              <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.7 }}>An animated expanding/contracting circle guides you through a 4-2-6-2 breathing pattern — inhale, hold, exhale, rest — to calm your nervous system in minutes.</p>
-            </motion.div>
-          </div>
-        </div>
-      </section>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-2">
+                    <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Overall Wellness Score</span>
+                    <div className="text-4xl font-extrabold text-emerald-400">{dnaData.wellnessScore} <span className="text-sm text-neutral-500">/ 100</span></div>
+                    <p className="text-xs text-neutral-400">Trending 4% higher than last week.</p>
+                  </div>
+                  <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-2">
+                    <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Stress Index</span>
+                    <div className="text-2xl font-bold text-white">{dnaData.stress}</div>
+                    <p className="text-xs text-emerald-400">Well managed through recent habits.</p>
+                  </div>
+                  <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-2">
+                    <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Burnout Risk</span>
+                    <div className="text-2xl font-bold text-white">{dnaData.burnoutRisk}</div>
+                    <p className="text-xs text-emerald-400">Optimal recovery balance maintained.</p>
+                  </div>
+                  <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-2">
+                    <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Anxiety Level</span>
+                    <div className="text-2xl font-bold text-white">{dnaData.anxiety}</div>
+                    <p className="text-xs text-emerald-400">Stable with mindful practices.</p>
+                  </div>
+                  <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-2">
+                    <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Happiness Index</span>
+                    <div className="text-2xl font-bold text-white">{dnaData.happiness}</div>
+                    <p className="text-xs text-emerald-400">Positive trend over 7 days.</p>
+                  </div>
+                  <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-2">
+                    <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Motivation</span>
+                    <div className="text-2xl font-bold text-white">{dnaData.motivation}</div>
+                    <p className="text-xs text-emerald-400">Driven by consistent habits.</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
-      {/* ── DASHBOARD / SANCTUARY ── */}
-      {showSanctuary && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4 }}
-          style={{ position: 'relative', zIndex: 1 }}
-        >
-          <Dashboard />
-        </motion.div>
-      )}
+            {/* TAB CONTENT: MOOD TRACKING */}
+            {activeTab === 'mood' && (
+              <div className="space-y-6">
+                <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-white">How are you feeling right now?</h2>
+                    <p className="text-xs text-neutral-400 mt-1">Select your current emotional state to update your timeline.</p>
+                  </div>
 
-      {!showSanctuary && (
-        <section style={{ position: 'relative', zIndex: 1, maxWidth: 1200, margin: '0 auto', padding: '0 24px 80px', textAlign: 'center' }}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            style={{
-              padding: '56px 32px', borderRadius: 28,
-              background: 'linear-gradient(135deg, rgba(16,185,129,0.06), rgba(5,150,105,0.04))',
-              border: '1px solid rgba(16,185,129,0.15)',
-            }}
-          >
-            <p style={{ fontSize: 12, color: '#6ee7b7', fontFamily: 'monospace', marginBottom: 16, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Ready when you are</p>
-            <h2 style={{ fontSize: 'clamp(1.6rem, 3vw, 2.2rem)', fontWeight: 700, color: '#fff', letterSpacing: '-0.025em', marginBottom: 14 }}>
-              Your sanctuary is one click away.
-            </h2>
-            <p style={{ fontSize: 14, color: '#6b7280', maxWidth: 380, margin: '0 auto 32px', lineHeight: 1.7 }}>
-              No account needed. No data collected. Just you, your thoughts, and a calm space to breathe.
-            </p>
-            <motion.button
-              whileHover={{ scale: 1.04, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleOpenSanctuary}
-              style={{
-                padding: '14px 36px', borderRadius: 16, fontSize: 14, fontWeight: 600,
-                background: 'linear-gradient(135deg, #059669, #10b981)',
-                color: '#fff', border: 'none', cursor: 'pointer',
-                boxShadow: '0 8px 32px rgba(16,185,129,0.35)',
-              }}
-            >
-              Open Sanctuary
-            </motion.button>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {[
+                      { label: 'Happy', emoji: '😊' },
+                      { label: 'Calm', emoji: '🌿' },
+                      { label: 'Stressed', emoji: '🌊' },
+                      { label: 'Excited', emoji: '✨' },
+                      { label: 'Tired', emoji: '🌙' },
+                      { label: 'Anxious', emoji: '☁️' }
+                    ].map((m) => (
+                      <button
+                        key={m.label}
+                        onClick={() => setSelectedMood(m.label)}
+                        className={`p-4 rounded-2xl border text-left transition-all flex items-center gap-3 ${
+                          selectedMood === m.label ? 'border-emerald-500 bg-emerald-500/15' : 'border-white/10 bg-black/30 hover:border-white/20'
+                        }`}
+                      >
+                        <span className="text-2xl">{m.emoji}</span>
+                        <span className="text-sm font-semibold text-white">{m.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-4">
+                  <h3 className="text-lg font-bold text-white">Recent Emotional History</h3>
+                  <div className="space-y-3">
+                    {moodHistory.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-4 rounded-2xl bg-black/30 border border-white/5">
+                        <span className="text-xs font-mono text-neutral-400">{item.day}</span>
+                        <span className="text-sm font-medium text-white flex items-center gap-2">{item.emoji} {item.mood}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: SMART JOURNAL */}
+            {activeTab === 'journal' && (
+              <div className="space-y-6">
+                <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-4">
+                  <h2 className="text-xl font-bold text-white">Daily AI Journal</h2>
+                  <p className="text-xs text-neutral-400">Write freely. Encrypted entries receive instant AI reflection summaries.</p>
+
+                  <textarea
+                    rows={5}
+                    value={journalText}
+                    onChange={(e) => setJournalText(e.target.value)}
+                    placeholder="What went well today? What challenges did you face?"
+                    className="w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors resize-none"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!journalText) return;
+                      setJournalEntries([{ date: 'Just now', snippet: journalText, tag: 'Reflective' }, ...journalEntries]);
+                      setJournalText('');
+                    }}
+                    className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-all shadow-lg shadow-emerald-500/20"
+                  >
+                    Save &amp; Analyze with MIRA
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-white">Past Entries</h3>
+                  {journalEntries.map((entry, idx) => (
+                    <div key={idx} className="p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-2">
+                      <div className="flex items-center justify-between text-xs text-neutral-400 font-mono">
+                        <span>{entry.date}</span>
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">{entry.tag}</span>
+                      </div>
+                      <p className="text-sm text-neutral-200">{entry.snippet}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: HABIT TRACKER */}
+            {activeTab === 'habits' && (
+              <div className="space-y-6">
+                <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-6">
+                  <h2 className="text-xl font-bold text-white">Daily Wellness Habits</h2>
+                  <div className="space-y-3">
+                    {habits.map((habit, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-4 rounded-2xl bg-black/30 border border-white/5">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={habit.done}
+                            onChange={() => toggleHabit(idx)}
+                            className="w-5 h-5 accent-emerald-500 rounded cursor-pointer"
+                          />
+                          <span className={`text-sm font-medium ${habit.done ? 'line-through text-neutral-500' : 'text-white'}`}>{habit.name}</span>
+                        </div>
+                        <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">🔥 {habit.streak} Day Streak</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: TOOLKIT */}
+            {activeTab === 'toolkit' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-4">
+                  <span className="text-xs font-mono text-emerald-400">BREATHING EXERCISE</span>
+                  <h3 className="text-xl font-bold text-white">Box Breathing (4-4-4-4)</h3>
+                  <p className="text-sm text-neutral-400">Regulate your nervous system instantly with guided pacing.</p>
+                  <div className="w-32 h-32 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto animate-pulse">
+                    <span className="text-xs text-emerald-300 font-bold">Breathe In</span>
+                  </div>
+                </div>
+
+                <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-4">
+                  <span className="text-xs font-mono text-emerald-400">EMERGENCY CALMING</span>
+                  <h3 className="text-xl font-bold text-white">Grounding Sanctuary</h3>
+                  <p className="text-sm text-neutral-400">Instant ambient soundscapes and quiet visual focus.</p>
+                  <button className="w-full py-3 rounded-xl bg-emerald-500 text-black font-semibold text-xs hover:bg-emerald-400 transition-all">
+                    Activate Calming Mode
+                  </button>
+                </div>
+              </div>
+            )}
+
           </motion.div>
-        </section>
-      )}
+        )}
 
-      {/* ── FOOTER ── */}
-      <footer style={{
-        position: 'relative', zIndex: 1,
-        borderTop: '1px solid rgba(255,255,255,0.06)',
-        padding: '32px 24px',
-        display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        maxWidth: 1200, margin: '0 auto',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{
-            width: 26, height: 26, borderRadius: 8,
-            background: 'linear-gradient(135deg, #059669, #10b981)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 800, color: '#fff', fontSize: 12,
-          }}>M</div>
-          <span style={{ fontSize: 12, color: '#6b7280' }}>© {new Date().getFullYear()} MindCast. All rights reserved.</span>
+      </AnimatePresence>
+
+      {/* ================================================================== */}
+      {/* FOOTER WITH REQUIRED CREDIT                                        */}
+      {/* ================================================================== */}
+      <footer className="border-t border-white/[0.06] py-8 px-6 lg:px-12 mt-24 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+        <div className="text-xs text-neutral-500">
+          © 2026 MindCast. AI Mental Wellness Operating System.
         </div>
-        <p className="text-xs text-neutral-500 font-mono tracking-wider">
+        <div className="text-xs text-neutral-500 font-mono tracking-wider">
           Made by Aditya Naik and Vihaan Vaghela
-        </p>
+        </div>
       </footer>
     </div>
   );
