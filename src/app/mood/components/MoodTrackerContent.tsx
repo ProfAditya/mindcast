@@ -6,6 +6,8 @@ import { Smile, Zap, Wind, Plus, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { moodApi, type MoodEntry, type MoodEntryCreate } from '@/lib/api';
 import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from 'recharts';
+import Icon from '@/components/ui/AppIcon';
+
 
 const MOOD_OPTIONS = [
   { value: 'great', label: 'Great', emoji: '😄', color: 'emerald', bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-300 dark:border-emerald-700' },

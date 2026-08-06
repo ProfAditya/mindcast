@@ -21,6 +21,12 @@ const nextConfig = {
       dev: dev
     }
   ) {
+    // Increase chunk load timeout to prevent ChunkLoadError on slow connections
+    config.output = {
+      ...config.output,
+      chunkLoadTimeout: 120000,
+    };
+
     if (dev) {
       config.module.rules.push({
         test: /\.(jsx|tsx)$/,

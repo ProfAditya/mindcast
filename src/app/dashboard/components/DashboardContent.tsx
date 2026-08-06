@@ -9,9 +9,11 @@ import {
   moodApi,
   journalApi,
   getStoredUser,
+  assessmentsApi,
   type DashboardStats,
   type MoodEntry,
   type JournalEntry,
+  type AssessmentResult,
 } from '@/lib/api';
 import WellnessScoreCard from './WellnessScoreCard';
 import MoodTrendChart from './MoodTrendChart';
@@ -19,6 +21,7 @@ import HabitRingsCard from './HabitRingsCard';
 import MiraInsightCard from './MiraInsightCard';
 import RecentJournalCard from './RecentJournalCard';
 import StatsStripCard from './StatsStripCard';
+import AssessmentHistoryCard from './AssessmentHistoryCard';
 
 function useTimeOfDay() {
   const [timeData, setTimeData] = useState({ greeting: 'Hello', period: 'day' });
@@ -69,6 +72,8 @@ export default function DashboardContent() {
   const [recentJournal, setRecentJournal] = useState<JournalEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
+  const [assessmentHistory, setAssessmentHistory] = useState<AssessmentResult[]>([]);
+  const [assessmentLoading, setAssessmentLoading] = useState(true);
 
   useEffect(() => {
     const d = new Date();
@@ -111,29 +116,56 @@ export default function DashboardContent() {
       }
     }
 
+    async function fetchAssessmentHistory() {
+      try {
+        const history = await assessmentsApi.list(10);
+        if (!cancelled && Array.isArray(history)) {
+          const sorted = [...history].sort(
+            (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
+          );
+          setAssessmentHistory(sorted);
+        }
+      } catch {
+        // silently fail — card shows empty state
+      } finally {
+        if (!cancelled) setAssessmentLoading(false);
+      }
+    }
+
     fetchDashboardData();
+    fetchAssessmentHistory();
     return () => { cancelled = true; };
   }, []);
 
   const displayName = userName ? userName.split(' ')[0] : '';
 
+  // Build sector scores from latest assessment for MiraInsightCard
+  const latestAssessment = assessmentHistory.length > 0 ? assessmentHistory[assessmentHistory.length - 1] : null;
+
+  const sectorScores = latestAssessment ? [
+    { key: 'stress', label: 'Stress Management', score: latestAssessment.stress_score ?? 0 },
+    { key: 'sleep', label: 'Sleep Quality', score: latestAssessment.sleep_score ?? 0 },
+    { key: 'work_study', label: 'Work / Study Load', score: (latestAssessment as any).work_study_score ?? latestAssessment.lifestyle_score ?? 0 },
+    { key: 'emotional', label: 'Emotional Balance', score: (latestAssessment as any).emotional_score ?? latestAssessment.psychology_score ?? 0 },
+  ].filter(s => s.score > 0) : [];
+
   return (
-    <div className="px-5 lg:px-8 xl:px-10 py-7 pb-24 lg:pb-8 max-w-screen-2xl mx-auto">
+    <div className="px-5 lg:px-8 xl:px-10 py-6 pb-24 lg:pb-8 max-w-screen-2xl mx-auto page-enter">
       {/* Page Header */}
       <motion.div
-        initial={{ opacity: 0, y: -10 }}
+        initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: 'easeOut' }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
         className="mb-7"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
             {dateStr && (
-              <p className="text-xs text-muted-foreground font-semibold mb-1.5 uppercase tracking-widest font-heading">
+              <p className="text-[11px] text-muted-foreground font-semibold mb-1.5 uppercase tracking-widest font-heading">
                 {dateStr}
               </p>
             )}
-            <h1 className="font-heading font-700 text-2xl lg:text-3xl text-foreground tracking-tight">
+            <h1 className="font-heading font-bold text-2xl lg:text-[28px] text-foreground tracking-tight leading-tight">
               {greeting}{displayName ? `, ${displayName}` : ''}
             </h1>
             {stats ? (
@@ -172,13 +204,13 @@ export default function DashboardContent() {
             ].map((stat) => {
               const StatIcon = stat.icon;
               return (
-                <div key={stat.label} className="rounded-2xl border border-border bg-card p-3.5 flex items-center gap-3">
+                <div key={stat.label} className="rounded-2xl border border-border bg-card p-3.5 flex items-center gap-3 card-hover elevation-xs">
                   <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center shrink-0', stat.bg)}>
                     <StatIcon size={15} strokeWidth={2} className={stat.color} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground truncate">{stat.label}</p>
-                    <p className="text-sm font-700 font-heading text-foreground">{stat.value}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{stat.label}</p>
+                    <p className="text-sm font-bold font-heading text-foreground">{stat.value}</p>
                   </div>
                 </div>
               );
@@ -191,7 +223,7 @@ export default function DashboardContent() {
         ) : (
           <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="rounded-2xl border border-border bg-card p-3.5 h-16 skeleton-shimmer" />
+              <div key={i} className="rounded-2xl border border-border bg-card p-3.5 h-[68px] skeleton-shimmer" />
             ))}
           </div>
         )}
@@ -202,7 +234,7 @@ export default function DashboardContent() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5"
+        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"
       >
         {/* Wellness Score */}
         <motion.div variants={itemVariants} className="xl:row-span-2">
@@ -221,7 +253,12 @@ export default function DashboardContent() {
 
         {/* Mira Insight */}
         <motion.div variants={itemVariants} className="md:col-span-1 xl:col-span-2">
-          <MiraInsightCard insight={null} />
+          <MiraInsightCard
+            insight={null}
+            overallScore={latestAssessment?.overall_score}
+            scoreTrend={stats?.assessment_trend as 'improving' | 'declining' | 'stable' | undefined}
+            sectorScores={sectorScores}
+          />
         </motion.div>
 
         {/* Recent Journal */}
@@ -232,6 +269,11 @@ export default function DashboardContent() {
         {/* Stats Strip */}
         <motion.div variants={itemVariants} className="md:col-span-2 xl:col-span-4">
           <StatsStripCard stats={stats} />
+        </motion.div>
+
+        {/* Assessment History */}
+        <motion.div variants={itemVariants} className="md:col-span-2 xl:col-span-4">
+          <AssessmentHistoryCard history={assessmentHistory} loading={assessmentLoading} />
         </motion.div>
       </motion.div>
 

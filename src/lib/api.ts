@@ -3,9 +3,27 @@
  * Connects to FastAPI backend at https://mindcast-backend.onrender.com/api
  */
 
-const BASE_URL =
-  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BACKEND_URL) ||
-  'https://mindcast-backend.onrender.com/api';
+function resolveBaseUrl(): string {
+  // In the browser, route all API calls through the Next.js proxy to avoid CORS.
+  // The proxy at /api/proxy/* forwards requests server-side to the FastAPI backend.
+  if (typeof window !== 'undefined') {
+    return '/api/proxy';
+  }
+
+  // On the server (SSR / API routes), call the backend directly.
+  const raw =
+    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BACKEND_URL) || '';
+
+  if (raw && raw.trim().length > 0) {
+    const trimmed = raw.trim().replace(/\/+$/, '');
+    if (trimmed.endsWith('/api')) return trimmed;
+    return `${trimmed}/api`;
+  }
+
+  return 'https://mindcast-backend.onrender.com/api';
+}
+
+const BASE_URL = resolveBaseUrl();
 
 // ─── Token Management ────────────────────────────────────────────────────────
 
@@ -63,10 +81,20 @@ async function request<T>(
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (networkErr) {
+    // TypeError: Failed to fetch — backend unreachable or CORS blocked
+    const msg =
+      networkErr instanceof TypeError
+        ? `Cannot reach the MindCast server. Please check your internet connection or try again later. (${networkErr.message})`
+        : `Network error: ${String(networkErr)}`;
+    throw new Error(msg);
+  }
 
   if (!res.ok) {
     let errorMsg = `API error ${res.status}`;
@@ -326,61 +354,67 @@ export const chatApi = {
   },
 
   /**
-   * POST /chat — SSE stream.
-   * Each chunk: "data: {text: '...'}"
-   * End:        "data: {done: true}"
+   * POST /api/chat — local Next.js route with LLM + fallback.
+   * Returns JSON: { reply: string }
+   * Simulates streaming client-side by delivering words in small chunks.
    */
   async streamMessage(
     message: string,
     onChunk: (text: string) => void,
-    onDone: () => void
-  ): Promise<void> {
-    const token = getToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const res = await fetch(`${BASE_URL}/chat`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ message }),
-    });
-
-    if (!res.ok || !res.body) {
-      let errorMsg = `Chat error ${res.status}`;
-      try {
-        const err = await res.json();
-        errorMsg = err.detail || err.message || errorMsg;
-      } catch { /* ignore */ }
-      throw new Error(errorMsg);
+    onDone: () => void,
+    context?: {
+      assessmentData?: AssessmentResult | null;
+      assessmentHistory?: AssessmentResult[];
+      recentMoods?: Array<{ mood: string; energy_level?: number; stress_level?: number; created_at?: string }>;
+      recentHabits?: Array<{ habit_type: string; value: number; unit?: string; completed?: boolean }>;
+      chatHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
     }
+  ): Promise<void> {
+    const FALLBACK = "I hear you, and I'm here for you. Let's focus on taking a slow, deep breath together — inhale for four counts, hold for four, exhale for four. You're not alone in this moment. 💙";
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
+    let replyText = FALLBACK;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      let res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          assessmentData: context?.assessmentData ?? null,
+          assessmentHistory: context?.assessmentHistory ?? [],
+          recentMoods: context?.recentMoods ?? [],
+          recentHabits: context?.recentHabits ?? [],
+          chatHistory: context?.chatHistory ?? [],
+        }),
+      });
 
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.done) {
-              onDone();
-              return;
-            }
-            if (parsed.text) onChunk(parsed.text);
-          } catch {
-            // non-JSON chunk — ignore
+      if (res.ok) {
+        try {
+          const data = await res.json();
+          const text = data?.reply;
+          if (typeof text === 'string' && text.trim().length > 0) {
+            replyText = text.trim();
           }
+        } catch {
+          // JSON parse failed — use fallback
         }
       }
+    } catch {
+      // Network error — use fallback
+    }
+
+    // Simulate streaming by delivering words in small batches
+    try {
+      const words = replyText.split(' ');
+      const chunkSize = 4;
+      for (let i = 0; i < words.length; i += chunkSize) {
+        const slice = words.slice(i, i + chunkSize);
+        const chunk = slice.join(' ') + (i + chunkSize < words.length ? ' ' : '');
+        onChunk(chunk);
+        await new Promise<void>((resolve) => setTimeout(resolve, 30));
+      }
+    } catch {
+      onChunk(replyText);
     }
 
     onDone();
@@ -416,16 +450,43 @@ export const askMyDataApi = {
 
 // ─── Assessments API ──────────────────────────────────────────────────────────
 
+export interface AssessmentResult {
+  id?: string;
+  overall_score?: number;
+  stress_score?: number;
+  sleep_score?: number;
+  psychology_score?: number;
+  lifestyle_score?: number;
+  created_at?: string;
+  answers?: Array<{ question_id: string; value: number }>;
+}
+
 export const assessmentsApi = {
   async getQuestions(): Promise<Array<{ id: string; question: string; type: string }>> {
     return request<Array<{ id: string; question: string; type: string }>>('/assessments/questions');
   },
 
-  async submit(answers: Array<{ question_id: string; value: number }>): Promise<Record<string, unknown>> {
-    return request<Record<string, unknown>>('/assessments', {
+  async submit(answers: Array<{ question_id: string; value: number }>): Promise<AssessmentResult> {
+    return request<AssessmentResult>('/assessments', {
       method: 'POST',
       body: JSON.stringify(answers),
     });
+  },
+
+  async getLatest(): Promise<AssessmentResult | null> {
+    try {
+      return await request<AssessmentResult>('/assessments/latest');
+    } catch {
+      return null;
+    }
+  },
+
+  async list(limit = 10): Promise<AssessmentResult[]> {
+    try {
+      return await request<AssessmentResult[]>(`/assessments?limit=${limit}`);
+    } catch {
+      return [];
+    }
   },
 };
 
@@ -483,7 +544,7 @@ export const adminApi = {
     const token = getToken();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/admin/export/${format}`, { headers });
+    let res = await fetch(`${BASE_URL}/admin/export/${format}`, { headers });
     if (!res.ok) throw new Error(`Export failed: ${res.status}`);
     return res.blob();
   },

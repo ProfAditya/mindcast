@@ -293,13 +293,35 @@ function SignupForm({ onSwitchTab }: { onSwitchTab: () => void }) {
 
 export default function AuthScreen() {
   const [activeTab, setActiveTab] = useState<AuthTab>('login');
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated()) {
       router.replace('/dashboard');
     }
   }, [router]);
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md">
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-12 h-12 rounded-2xl gradient-violet-rose flex items-center justify-center mb-4">
+              <AppLogo size={24} />
+            </div>
+            <h1 className="font-heading font-700 text-2xl text-foreground tracking-tight">MindCast</h1>
+            <p className="text-muted-foreground text-sm mt-1">Your personal wellness companion</p>
+          </div>
+          <div className="rounded-3xl border border-border bg-card p-8 shadow-card-md min-h-[320px]" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">

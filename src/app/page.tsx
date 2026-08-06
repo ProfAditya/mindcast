@@ -1,1374 +1,1409 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// ─── Animated Background ────────────────────────────────────────────────────
-function AnimatedBackground() {
-  return (
-    <div className="fixed inset-0 -z-10 overflow-hidden">
-      <div className="absolute inset-0 bg-[#06080F]" />
-      {/* Orbs */}
-      <div
-        className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full opacity-20"
-        style={{
-          background: 'radial-gradient(circle, #7C3AED 0%, transparent 70%)',
-          animation: 'orbFloat1 18s ease-in-out infinite',
-        }}
-      />
-      <div
-        className="absolute top-1/3 -right-60 w-[600px] h-[600px] rounded-full opacity-15"
-        style={{
-          background: 'radial-gradient(circle, #FB7185 0%, transparent 70%)',
-          animation: 'orbFloat2 22s ease-in-out infinite',
-        }}
-      />
-      <div
-        className="absolute bottom-0 left-1/3 w-[500px] h-[500px] rounded-full opacity-10"
-        style={{
-          background: 'radial-gradient(circle, #0EA5E9 0%, transparent 70%)',
-          animation: 'orbFloat3 26s ease-in-out infinite',
-        }}
-      />
-      {/* Grid */}
-      <div
-        className="absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
-          backgroundSize: '60px 60px',
-        }}
-      />
-      <style>{`
-        @keyframes orbFloat1 {
-          0%,100%{transform:translate(0,0) scale(1);}
-          33%{transform:translate(80px,60px) scale(1.1);}
-          66%{transform:translate(-40px,100px) scale(0.95);}
-        }
-        @keyframes orbFloat2 {
-          0%,100%{transform:translate(0,0) scale(1);}
-          33%{transform:translate(-100px,80px) scale(1.05);}
-          66%{transform:translate(60px,-60px) scale(1.1);}
-        }
-        @keyframes orbFloat3 {
-          0%,100%{transform:translate(0,0) scale(1);}
-          50%{transform:translate(80px,-80px) scale(1.08);}
-        }
-        @keyframes floatY {
-          0%,100%{transform:translateY(0);}
-          50%{transform:translateY(-12px);}
-        }
-        @keyframes spinSlow {
-          from{transform:rotate(0deg);}
-          to{transform:rotate(360deg);}
-        }
-        @keyframes pulseRing {
-          0%{transform:scale(1);opacity:0.6;}
-          100%{transform:scale(1.8);opacity:0;}
-        }
-        @keyframes gradientShift {
-          0%,100%{background-position:0% 50%;}
-          50%{background-position:100% 50%;}
-        }
-        @keyframes ticker {
-          0%{transform:translateX(0);}
-          100%{transform:translateX(-50%);}
-        }
-        @keyframes fadeSlideUp {
-          from{opacity:0;transform:translateY(24px);}
-          to{opacity:1;transform:translateY(0);}
-        }
-        @keyframes fadeIn {
-          from{opacity:0;}
-          to{opacity:1;}
-        }
-        .anim-fade-slide-up { animation: fadeSlideUp 0.7s cubic-bezier(0.22,1,0.36,1) both; }
-        .anim-fade-in { animation: fadeIn 0.6s ease both; }
-        .delay-100 { animation-delay: 0.1s; }
-        .delay-200 { animation-delay: 0.2s; }
-        .delay-300 { animation-delay: 0.3s; }
-        .delay-400 { animation-delay: 0.4s; }
-        .delay-500 { animation-delay: 0.5s; }
-        .delay-600 { animation-delay: 0.6s; }
-        .delay-700 { animation-delay: 0.7s; }
-        .delay-800 { animation-delay: 0.8s; }
-      `}</style>
-    </div>
-  );
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ChatMessage {
+  id: string;
+  sender: 'mira' | 'user';
+  text: string;
+  timestamp: Date;
 }
 
-// ─── Navbar ──────────────────────────────────────────────────────────────────
-function Navbar() {
-  const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+interface MoodEntry {
+  id: string;
+  day: string;
+  mood: string;
+  emoji: string;
+  time: string;
+}
 
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+interface JournalEntry {
+  id: string;
+  date: string;
+  snippet: string;
+  tag: string;
+  aiSummary?: string;
+}
 
-  const navLinks = [
-    { label: 'Home', href: '#home' },
-    { label: 'Features', href: '#features' },
-    { label: 'About', href: '#about' },
-    { label: 'FAQ', href: '#faq' },
-    { label: 'Contact', href: '#contact' },
+interface Habit {
+  id: string;
+  name: string;
+  done: boolean;
+  streak: number;
+  icon: string;
+}
+
+interface User {
+  email: string;
+  name: string;
+}
+
+interface AssessmentQuestion {
+  id: string;
+  text: string;
+  category: string;
+  options: { label: string; text: string; score: number }[];
+}
+
+type View = 'landing' | 'login' | 'signup' | 'dashboard';
+type Tab = 'mira' | 'assessments' | 'dna' | 'mood' | 'journal' | 'habits' | 'toolkit';
+type AssessmentTier = 1 | 2 | 3;
+type BreathPhase = 'inhale' | 'hold-in' | 'exhale' | 'hold-out' | 'idle';
+
+// ─── Assessment Questions ─────────────────────────────────────────────────────
+
+const ASSESSMENT_T1: AssessmentQuestion[] = [
+  { id: 'q1', category: 'Stress', text: 'How would you rate your overall stress level today?', options: [{ label: 'A', text: 'Very calm and at ease', score: 4 }, { label: 'B', text: 'Mild stress, manageable', score: 3 }, { label: 'C', text: 'Noticeably stressed', score: 2 }, { label: 'D', text: 'Overwhelmed or anxious', score: 1 }] },
+  { id: 'q2', category: 'Sleep', text: 'How many hours of sleep did you get last night?', options: [{ label: 'A', text: '8+ hours — felt fully rested', score: 4 }, { label: 'B', text: '6–8 hours — mostly rested', score: 3 }, { label: 'C', text: '4–6 hours — somewhat tired', score: 2 }, { label: 'D', text: 'Under 4 hours — exhausted', score: 1 }] },
+  { id: 'q3', category: 'Mood', text: 'How is your mood right now, in this moment?', options: [{ label: 'A', text: 'Positive and uplifted', score: 4 }, { label: 'B', text: 'Neutral and steady', score: 3 }, { label: 'C', text: 'A bit low or flat', score: 2 }, { label: 'D', text: 'Sad, irritable, or anxious', score: 1 }] },
+  { id: 'q4', category: 'Stress', text: 'How often did you feel overwhelmed by tasks today?', options: [{ label: 'A', text: 'Not at all', score: 4 }, { label: 'B', text: 'Once or twice briefly', score: 3 }, { label: 'C', text: 'Several times', score: 2 }, { label: 'D', text: 'Almost constantly', score: 1 }] },
+  { id: 'q5', category: 'Sleep', text: 'How easily did you fall asleep last night?', options: [{ label: 'A', text: 'Fell asleep quickly and easily', score: 4 }, { label: 'B', text: 'Took a little time but fine', score: 3 }, { label: 'C', text: 'Took a long time, restless', score: 2 }, { label: 'D', text: 'Could barely sleep at all', score: 1 }] },
+  { id: 'q6', category: 'Connection', text: 'How connected do you feel to the people around you today?', options: [{ label: 'A', text: 'Very connected and supported', score: 4 }, { label: 'B', text: 'Somewhat connected', score: 3 }, { label: 'C', text: 'A bit isolated', score: 2 }, { label: 'D', text: 'Completely alone or unsupported', score: 1 }] },
+  { id: 'q7', category: 'Focus', text: 'How productive did you feel in your work or studies today?', options: [{ label: 'A', text: 'Highly focused and productive', score: 4 }, { label: 'B', text: 'Moderately productive', score: 3 }, { label: 'C', text: 'Struggled to concentrate', score: 2 }, { label: 'D', text: 'Could not focus at all', score: 1 }] },
+  { id: 'q8', category: 'Energy', text: 'How is your energy level right now?', options: [{ label: 'A', text: 'High energy, feeling great', score: 4 }, { label: 'B', text: 'Moderate energy', score: 3 }, { label: 'C', text: 'Low energy, dragging', score: 2 }, { label: 'D', text: 'Completely drained', score: 1 }] },
+  { id: 'q9', category: 'Outlook', text: 'How optimistic do you feel about the rest of your day?', options: [{ label: 'A', text: 'Very optimistic', score: 4 }, { label: 'B', text: 'Somewhat hopeful', score: 3 }, { label: 'C', text: 'Uncertain or neutral', score: 2 }, { label: 'D', text: 'Pessimistic or dreading it', score: 1 }] },
+  { id: 'q10', category: 'Balance', text: 'How satisfied are you with your work-life balance today?', options: [{ label: 'A', text: 'Very satisfied', score: 4 }, { label: 'B', text: 'Mostly satisfied', score: 3 }, { label: 'C', text: 'Somewhat dissatisfied', score: 2 }, { label: 'D', text: 'Very dissatisfied or burned out', score: 1 }] },
+];
+
+const ASSESSMENT_T2_EXTRA: AssessmentQuestion[] = [
+  { id: 'q11', category: 'Sleep', text: 'How consistent is your sleep schedule across the week?', options: [{ label: 'A', text: 'Very consistent — same time daily', score: 4 }, { label: 'B', text: 'Mostly consistent with minor variation', score: 3 }, { label: 'C', text: 'Irregular — varies significantly', score: 2 }, { label: 'D', text: 'No routine at all', score: 1 }] },
+  { id: 'q12', category: 'Coping', text: 'How often do you use healthy coping strategies (exercise, journaling, breathing)?', options: [{ label: 'A', text: "Daily — it's a core habit", score: 4 }, { label: 'B', text: 'A few times a week', score: 3 }, { label: 'C', text: 'Occasionally when stressed', score: 2 }, { label: 'D', text: 'Rarely or never', score: 1 }] },
+  { id: 'q13', category: 'Mood Stability', text: 'How stable has your mood been over the past two weeks?', options: [{ label: 'A', text: 'Very stable — consistent and balanced', score: 4 }, { label: 'B', text: 'Mostly stable with minor ups and downs', score: 3 }, { label: 'C', text: 'Noticeably fluctuating', score: 2 }, { label: 'D', text: 'Highly volatile or unpredictable', score: 1 }] },
+  { id: 'q14', category: 'Recovery', text: 'How often do you take meaningful breaks during your work or study sessions?', options: [{ label: 'A', text: 'Regularly — every 60–90 minutes', score: 4 }, { label: 'B', text: 'Sometimes, when I remember', score: 3 }, { label: 'C', text: 'Rarely — I push through', score: 2 }, { label: 'D', text: 'Never — I work until I crash', score: 1 }] },
+  { id: 'q15', category: 'Emotional Expression', text: 'How comfortable are you expressing your emotions to someone you trust?', options: [{ label: 'A', text: 'Very comfortable — I share openly', score: 4 }, { label: 'B', text: 'Somewhat comfortable', score: 3 }, { label: 'C', text: 'Uncomfortable — I tend to bottle things up', score: 2 }, { label: 'D', text: 'I have no one I trust to share with', score: 1 }] },
+  { id: 'q16', category: 'Physical Stress', text: 'How often do physical symptoms (headaches, tension, stomach issues) appear when stressed?', options: [{ label: 'A', text: 'Rarely or never', score: 4 }, { label: 'B', text: 'Occasionally during peak stress', score: 3 }, { label: 'C', text: 'Frequently', score: 2 }, { label: 'D', text: 'Almost always when stressed', score: 1 }] },
+  { id: 'q17', category: 'Sleep Quality', text: 'How refreshed do you typically feel upon waking?', options: [{ label: 'A', text: 'Fully refreshed and energized', score: 4 }, { label: 'B', text: 'Reasonably rested', score: 3 }, { label: 'C', text: 'Groggy and slow to start', score: 2 }, { label: 'D', text: 'Exhausted even after sleeping', score: 1 }] },
+  { id: 'q18', category: 'Social Wellbeing', text: 'How satisfied are you with your social relationships and support network?', options: [{ label: 'A', text: 'Very satisfied — strong connections', score: 4 }, { label: 'B', text: 'Moderately satisfied', score: 3 }, { label: 'C', text: 'Somewhat dissatisfied', score: 2 }, { label: 'D', text: 'Very dissatisfied or isolated', score: 1 }] },
+  { id: 'q19', category: 'Workload', text: 'How often do you feel your workload is fair and manageable?', options: [{ label: 'A', text: 'Almost always', score: 4 }, { label: 'B', text: 'Most of the time', score: 3 }, { label: 'C', text: 'Sometimes — often feels too heavy', score: 2 }, { label: 'D', text: "Rarely — I'm constantly overloaded", score: 1 }] },
+  { id: 'q20', category: 'Priorities', text: 'How well do you manage competing priorities and deadlines?', options: [{ label: 'A', text: 'Very well — I stay organized and calm', score: 4 }, { label: 'B', text: 'Reasonably well with some stress', score: 3 }, { label: 'C', text: 'Struggle — often feel behind', score: 2 }, { label: 'D', text: 'Poorly — deadlines cause panic', score: 1 }] },
+  { id: 'q21', category: 'Joy', text: 'How often do you engage in activities purely for joy or relaxation?', options: [{ label: 'A', text: 'Daily or near-daily', score: 4 }, { label: 'B', text: 'A few times a week', score: 3 }, { label: 'C', text: 'Rarely — no time or energy', score: 2 }, { label: 'D', text: "Never — I've lost interest in things I used to enjoy", score: 1 }] },
+  { id: 'q22', category: 'Screen Habits', text: 'How often do you use screens (phone, laptop) in the hour before bed?', options: [{ label: 'A', text: 'Never — I have a screen-free wind-down', score: 4 }, { label: 'B', text: 'Occasionally', score: 3 }, { label: 'C', text: 'Most nights', score: 2 }, { label: 'D', text: 'Every night until I fall asleep', score: 1 }] },
+  { id: 'q23', category: 'Boundaries', text: 'How often do work or study demands spill into your personal time?', options: [{ label: 'A', text: 'Rarely — I maintain clear boundaries', score: 4 }, { label: 'B', text: 'Sometimes during busy periods', score: 3 }, { label: 'C', text: 'Frequently', score: 2 }, { label: 'D', text: 'Almost always — no separation', score: 1 }] },
+  { id: 'q24', category: 'Mindfulness', text: 'How often do you practice mindfulness, meditation, or intentional breathing?', options: [{ label: 'A', text: 'Daily', score: 4 }, { label: 'B', text: 'A few times a week', score: 3 }, { label: 'C', text: 'Rarely', score: 2 }, { label: 'D', text: 'Never', score: 1 }] },
+  { id: 'q25', category: 'Hope', text: 'How hopeful do you feel about your mental health and personal growth over the next month?', options: [{ label: 'A', text: 'Very hopeful and motivated', score: 4 }, { label: 'B', text: 'Cautiously optimistic', score: 3 }, { label: 'C', text: 'Uncertain or neutral', score: 2 }, { label: 'D', text: 'Pessimistic or hopeless', score: 1 }] },
+];
+
+const ASSESSMENT_T3_EXTRA: AssessmentQuestion[] = [
+  { id: 'q26', category: 'Background', text: 'How would you describe the emotional environment you grew up in?', options: [{ label: 'A', text: 'Warm, supportive, and stable', score: 4 }, { label: 'B', text: 'Mostly positive with some tension', score: 3 }, { label: 'C', text: 'Stressful or emotionally inconsistent', score: 2 }, { label: 'D', text: 'Difficult, traumatic, or neglectful', score: 1 }] },
+  { id: 'q27', category: 'Patterns', text: 'How has your family background shaped your current stress responses?', options: [{ label: 'A', text: 'Positively — I learned healthy coping', score: 4 }, { label: 'B', text: 'Mixed — some helpful, some not', score: 3 }, { label: 'C', text: 'Negatively — I struggle with patterns from childhood', score: 2 }, { label: 'D', text: 'Significantly — past trauma still affects me daily', score: 1 }] },
+  { id: 'q28', category: 'Family History', text: 'Is there a history of mental health challenges in your family?', options: [{ label: 'A', text: 'No known history', score: 4 }, { label: 'B', text: 'Possibly, but not discussed openly', score: 3 }, { label: 'C', text: 'Yes, in one or two family members', score: 2 }, { label: 'D', text: 'Yes, significant history across family', score: 1 }] },
+  { id: 'q29', category: 'Family Relations', text: 'How would you describe your current relationship with your family?', options: [{ label: 'A', text: 'Close, supportive, and healthy', score: 4 }, { label: 'B', text: 'Decent with occasional friction', score: 3 }, { label: 'C', text: 'Strained or distant', score: 2 }, { label: 'D', text: 'Estranged or a source of significant stress', score: 1 }] },
+  { id: 'q30', category: 'Trauma', text: 'Have you experienced a significant life trauma or loss in the past two years?', options: [{ label: 'A', text: 'No significant trauma or loss', score: 4 }, { label: 'B', text: "Minor setbacks I've largely processed", score: 3 }, { label: 'C', text: "A significant event I'm still processing", score: 2 }, { label: 'D', text: 'A major trauma that still deeply affects me', score: 1 }] },
+  { id: 'q31', category: 'Duration', text: 'How long have you been experiencing your current mental wellness challenges?', options: [{ label: 'A', text: 'This is new — less than a month', score: 4 }, { label: 'B', text: '1–6 months', score: 3 }, { label: 'C', text: '6 months to 2 years', score: 2 }, { label: 'D', text: 'More than 2 years — it feels chronic', score: 1 }] },
+  { id: 'q32', category: 'Support History', text: 'Have you previously sought professional mental health support (therapy, counseling)?', options: [{ label: 'A', text: 'Yes, and it was very helpful', score: 4 }, { label: 'B', text: 'Yes, with mixed results', score: 3 }, { label: 'C', text: "No, but I've considered it", score: 2 }, { label: 'D', text: "No, and I feel I can't access it", score: 1 }] },
+  { id: 'q33', category: 'Resilience', text: 'How would you describe your overall resilience when facing setbacks?', options: [{ label: 'A', text: 'Very resilient — I bounce back quickly', score: 4 }, { label: 'B', text: 'Moderately resilient', score: 3 }, { label: 'C', text: 'I struggle but eventually recover', score: 2 }, { label: 'D', text: 'Setbacks knock me down for a long time', score: 1 }] },
+  { id: 'q34', category: 'Crisis Response', text: 'When you face a major unexpected problem, your first instinct is to:', options: [{ label: 'A', text: 'Stay calm, assess, and take action', score: 4 }, { label: 'B', text: 'Feel stressed but work through it', score: 3 }, { label: 'C', text: 'Feel paralyzed or avoidant initially', score: 2 }, { label: 'D', text: 'Spiral into anxiety or shutdown', score: 1 }] },
+  { id: 'q35', category: 'Conflict', text: 'In a conflict with someone important to you, you typically:', options: [{ label: 'A', text: 'Communicate openly and resolve it calmly', score: 4 }, { label: 'B', text: 'Try to resolve it but it takes time', score: 3 }, { label: 'C', text: 'Withdraw or avoid the conflict', score: 2 }, { label: 'D', text: 'React intensely or the conflict escalates', score: 1 }] },
+  { id: 'q36', category: 'Pre-stress Sleep', text: 'When you have a high-pressure day ahead, your sleep the night before is typically:', options: [{ label: 'A', text: 'Normal — I sleep well regardless', score: 4 }, { label: 'B', text: 'Slightly disrupted but manageable', score: 3 }, { label: 'C', text: 'Significantly disrupted by anticipatory anxiety', score: 2 }, { label: 'D', text: 'Almost no sleep — I lie awake for hours', score: 1 }] },
+  { id: 'q37', category: 'Purpose', text: 'How aligned do you feel with your life purpose and long-term goals?', options: [{ label: 'A', text: 'Very aligned — my path feels meaningful', score: 4 }, { label: 'B', text: 'Mostly aligned with some doubts', score: 3 }, { label: 'C', text: 'Misaligned — I feel stuck or unfulfilled', score: 2 }, { label: 'D', text: 'Completely disconnected — I dread my future', score: 1 }] },
+  { id: 'q38', category: 'Self-Compassion', text: 'How kind are you to yourself when you make mistakes?', options: [{ label: 'A', text: 'Very kind — I practice self-compassion', score: 4 }, { label: 'B', text: 'Mostly kind with occasional self-criticism', score: 3 }, { label: 'C', text: 'Quite self-critical', score: 2 }, { label: 'D', text: 'Harshly self-critical — I struggle to forgive myself', score: 1 }] },
+  { id: 'q39', category: 'Existential', text: 'How often do you feel a deep sense of meaning or purpose in your daily life?', options: [{ label: 'A', text: 'Frequently — my life feels purposeful', score: 4 }, { label: 'B', text: 'Sometimes — in certain areas', score: 3 }, { label: 'C', text: 'Rarely — I struggle to find meaning', score: 2 }, { label: 'D', text: 'Almost never — I feel existentially empty', score: 1 }] },
+  { id: 'q40', category: 'Neurological Fatigue', text: 'How often do you experience mental fog, difficulty thinking clearly, or cognitive exhaustion?', options: [{ label: 'A', text: 'Rarely — my mind is usually clear', score: 4 }, { label: 'B', text: 'Occasionally during high-stress periods', score: 3 }, { label: 'C', text: 'Frequently — it affects my daily functioning', score: 2 }, { label: 'D', text: 'Almost constantly — I feel mentally depleted', score: 1 }] },
+];
+
+const TIER_CONFIG = {
+  1: { questions: ASSESSMENT_T1, label: 'Quick Mental Health & Stress Check', desc: '10-question rapid psychological screening focused on daily tension, sleep quality, and immediate emotional load.', time: '3–5 min', color: 'emerald' },
+  2: { questions: [...ASSESSMENT_T1, ...ASSESSMENT_T2_EXTRA], label: 'Comprehensive Emotional & Behavioral Audit', desc: '25-question intermediate evaluation analyzing cognitive patterns, interpersonal boundaries, anxiety triggers, and resilience markers.', time: '8–12 min', color: 'teal' },
+  3: { questions: [...ASSESSMENT_T1, ...ASSESSMENT_T2_EXTRA, ...ASSESSMENT_T3_EXTRA], label: 'Deep-Reasoning Psychoanalytical & Cognitive Profile', desc: '40-question exhaustive multi-dimensional assessment evaluating subconscious stress loops, existential alignment, deep neurological fatigue, core behavioral drivers, and long-term psychological resilience.', time: '15–20 min', color: 'sky' },
+};
+
+// ─── MIRA Context-Aware Responses ────────────────────────────────────────────
+
+const MIRA_RESPONSES: Record<string, string[]> = {
+  stress: [
+    "I can sense the weight you're carrying. Let's try a quick grounding technique — name 5 things you can see right now. This anchors your nervous system to the present moment.",
+    "Stress often signals that something important to you is at stake. What's the core concern underneath this feeling? Let's work through it together.",
+    "Your body is responding to perceived threat. Try box breathing: inhale 4 counts, hold 4, exhale 4, hold 4. Repeat 3 times. I'll be here when you're ready.",
+  ],
+  anxiety: [
+    "Anxiety is your mind trying to protect you — but sometimes it overcorrects. Let's separate what's real from what's imagined. What specifically feels most threatening right now?",
+    "When anxiety spikes, your prefrontal cortex goes offline. Physical movement — even a 2-minute walk — can reset your nervous system. Would you like a guided breathing exercise?",
+    "You're not your anxiety. It's a wave, and waves pass. Let's ride this one together. What's one small thing you can control right now?",
+  ],
+  sad: [
+    "I hear you. Sadness is a valid, important emotion — it means you care deeply. You don't have to rush through this. What's weighing on your heart today?",
+    "Sometimes the most healing thing is simply being witnessed. I'm here, fully present with you. Tell me more about what you're feeling.",
+    "Low moods often carry messages. What do you think your sadness is trying to tell you? There's wisdom in it, even when it's painful.",
+  ],
+  sleep: [
+    "Sleep is the foundation of mental health — everything else builds on it. Let's look at your sleep environment. Is your room cool, dark, and screen-free before bed?",
+    "Racing thoughts at bedtime are incredibly common. Try the 4-7-8 technique: inhale 4s, hold 7s, exhale 8s. It activates your parasympathetic nervous system.",
+    "Your sleep struggles are real and valid. A consistent wake time — even on weekends — is the single most powerful sleep intervention. Would you like a personalized wind-down ritual?",
+  ],
+  happy: [
+    "I love hearing this! Positive emotions are worth savoring — they build psychological resilience. What's contributing to this feeling? Let's anchor it.",
+    "This is wonderful. Happiness isn't just a feeling — it's a signal that your needs are being met. What's working well for you right now?",
+    "Your positive energy is real and meaningful. Let's use this moment to reflect: what habits or choices led you here? They're worth repeating.",
+  ],
+  default: [
+    "I hear you, and I'm fully present with you. Based on what you've shared, let's take a slow breath together — in for 4 counts, hold for 4, out for 6. You're not alone in this.",
+    "Thank you for sharing that with me. Your feelings are valid and important. What would feel most supportive right now — talking through it, a breathing exercise, or just being heard?",
+    "I'm here with you. Every feeling you experience is data about your inner world. Let's explore this together with curiosity rather than judgment. What feels most pressing?",
+    "Your awareness of your own emotional state is a genuine strength. Many people never pause to check in with themselves. What would you like to focus on today?",
+  ],
+};
+
+function getMiraResponse(userText: string): string {
+  const lower = userText.toLowerCase();
+  if (lower.includes('stress') || lower.includes('overwhelm') || lower.includes('pressure')) {
+    return MIRA_RESPONSES.stress[Math.floor(Math.random() * MIRA_RESPONSES.stress.length)];
+  }
+  if (lower.includes('anxi') || lower.includes('worry') || lower.includes('panic') || lower.includes('fear')) {
+    return MIRA_RESPONSES.anxiety[Math.floor(Math.random() * MIRA_RESPONSES.anxiety.length)];
+  }
+  if (lower.includes('sad') || lower.includes('depress') || lower.includes('low') || lower.includes('down') || lower.includes('cry')) {
+    return MIRA_RESPONSES.sad[Math.floor(Math.random() * MIRA_RESPONSES.sad.length)];
+  }
+  if (lower.includes('sleep') || lower.includes('tired') || lower.includes('exhaust') || lower.includes('insomnia')) {
+    return MIRA_RESPONSES.sleep[Math.floor(Math.random() * MIRA_RESPONSES.sleep.length)];
+  }
+  if (lower.includes('happy') || lower.includes('great') || lower.includes('good') || lower.includes('amazing') || lower.includes('wonderful')) {
+    return MIRA_RESPONSES.happy[Math.floor(Math.random() * MIRA_RESPONSES.happy.length)];
+  }
+  return MIRA_RESPONSES.default[Math.floor(Math.random() * MIRA_RESPONSES.default.length)];
+}
+
+// ─── Animation Variants ───────────────────────────────────────────────────────
+
+const fadeVariants = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -12 },
+};
+const transition = { duration: 0.3, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] };
+
+// ─── Box Breathing Component ──────────────────────────────────────────────────
+
+function BoxBreathingVisualizer() {
+  const [phase, setPhase] = useState<BreathPhase>('idle');
+  const [count, setCount] = useState(0);
+  const [cycle, setCycle] = useState(0);
+  const [isActive, setIsActive] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const phaseRef = useRef<BreathPhase>('idle');
+  const countRef = useRef(0);
+
+  const PHASES: { phase: BreathPhase; duration: number; label: string; instruction: string }[] = [
+    { phase: 'inhale', duration: 4, label: 'Inhale', instruction: 'Breathe in slowly through your nose' },
+    { phase: 'hold-in', duration: 4, label: 'Hold', instruction: 'Hold your breath gently' },
+    { phase: 'exhale', duration: 4, label: 'Exhale', instruction: 'Breathe out slowly through your mouth' },
+    { phase: 'hold-out', duration: 4, label: 'Hold', instruction: 'Rest before the next breath' },
   ];
 
+  const currentPhaseData = PHASES.find(p => p.phase === phase) ?? PHASES[0];
+
+  const startBreathing = useCallback(() => {
+    setIsActive(true);
+    setPhase('inhale');
+    phaseRef.current = 'inhale';
+    setCount(4);
+    countRef.current = 4;
+    setCycle(0);
+
+    let phaseIdx = 0;
+    let currentCount = 4;
+
+    intervalRef.current = setInterval(() => {
+      currentCount--;
+      if (currentCount <= 0) {
+        phaseIdx = (phaseIdx + 1) % 4;
+        if (phaseIdx === 0) setCycle(c => c + 1);
+        const nextPhase = PHASES[phaseIdx];
+        phaseRef.current = nextPhase.phase;
+        setPhase(nextPhase.phase);
+        currentCount = nextPhase.duration;
+      }
+      countRef.current = currentCount;
+      setCount(currentCount);
+    }, 1000);
+  }, []);
+
+  const stopBreathing = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setIsActive(false);
+    setPhase('idle');
+    setCount(0);
+  }, []);
+
+  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+
+  const circleScale = phase === 'inhale' ? 1.4 : phase === 'hold-in' ? 1.4 : phase === 'exhale' ? 0.7 : 0.7;
+  const phaseColor = phase === 'inhale' ? '#10b981' : phase === 'hold-in' ? '#0ea5e9' : phase === 'exhale' ? '#8b5cf6' : '#f59e0b';
+
   return (
-    <nav
-      className="fixed top-0 left-0 right-0 z-50 transition-all duration-500"
-      style={{
-        background: scrolled ? 'rgba(6,8,15,0.85)' : 'transparent',
-        backdropFilter: scrolled ? 'blur(20px)' : 'none',
-        borderBottom: scrolled ? '1px solid rgba(255,255,255,0.06)' : 'none',
-      }}
-    >
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        {/* Logo */}
-        <a href="#home" className="flex items-center gap-2.5 group">
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #7C3AED, #FB7185)' }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M8 2C5.8 2 4 3.8 4 6c0 1.5.8 2.8 2 3.5V11h4V9.5C11.2 8.8 12 7.5 12 6c0-2.2-1.8-4-4-4z" fill="white" opacity="0.9"/>
-              <path d="M6 11h4v1.5a.5.5 0 01-.5.5h-3a.5.5 0 01-.5-.5V11z" fill="white" opacity="0.6"/>
-            </svg>
-          </div>
-          <span className="font-heading font-bold text-white text-lg tracking-tight">MindCast</span>
-        </a>
-
-        {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-1">
-          {navLinks.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              className="px-4 py-2 text-sm font-medium text-white/60 hover:text-white transition-colors duration-200 rounded-lg hover:bg-white/5"
-            >
-              {link.label}
-            </a>
-          ))}
-        </div>
-
-        {/* CTA Buttons */}
-        <div className="hidden md:flex items-center gap-3">
-          <Link
-            href="/sign-up-login-screen"
-            className="px-4 py-2 text-sm font-medium text-white/70 hover:text-white transition-colors duration-200"
-          >
-            Login
-          </Link>
-          <Link
-            href="/sign-up-login-screen"
-            className="px-5 py-2.5 text-sm font-semibold text-white rounded-full transition-all duration-200 hover:opacity-90 hover:-translate-y-0.5"
+    <div className="space-y-6">
+      <div className="flex flex-col items-center gap-6">
+        {/* Animated Circle */}
+        <div className="relative flex items-center justify-center w-48 h-48">
+          {/* Outer glow ring */}
+          <motion.div
+            animate={{ scale: isActive ? circleScale * 1.15 : 1, opacity: isActive ? 0.3 : 0.1 }}
+            transition={{ duration: isActive ? (phase === 'inhale' || phase === 'exhale' ? 4 : 0.3) : 0.3, ease: 'easeInOut' }}
+            className="absolute w-40 h-40 rounded-full"
+            style={{ background: `radial-gradient(circle, ${phaseColor}40, transparent)` }}
+          />
+          {/* Main breathing circle */}
+          <motion.div
+            animate={{ scale: isActive ? circleScale : 1 }}
+            transition={{ duration: isActive ? (phase === 'inhale' || phase === 'exhale' ? 4 : 0.3) : 0.3, ease: 'easeInOut' }}
+            className="w-32 h-32 rounded-full flex flex-col items-center justify-center relative"
             style={{
-              background: 'linear-gradient(135deg, #7C3AED, #A855F7)',
-              boxShadow: '0 4px 16px rgba(124,58,237,0.4)',
+              background: `radial-gradient(circle at 40% 40%, ${phaseColor}30, ${phaseColor}10)`,
+              border: `2px solid ${phaseColor}50`,
+              boxShadow: isActive ? `0 0 40px ${phaseColor}30` : 'none',
             }}
           >
-            Sign Up
-          </Link>
-        </div>
-
-        {/* Mobile Menu Button */}
-        <button
-          className="md:hidden p-2 text-white/70 hover:text-white"
-          onClick={() => setMenuOpen(!menuOpen)}
-          aria-label="Toggle menu"
-        >
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            {menuOpen ? (
-              <path d="M4 4l14 14M18 4L4 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            {isActive ? (
+              <>
+                <span className="text-3xl font-bold text-white">{count}</span>
+                <span className="text-xs font-semibold mt-1" style={{ color: phaseColor }}>
+                  {currentPhaseData.label}
+                </span>
+              </>
             ) : (
-              <path d="M3 6h16M3 11h16M3 16h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              <span className="text-xs text-neutral-400 text-center px-2">Press Start</span>
             )}
-          </svg>
-        </button>
-      </div>
+          </motion.div>
+        </div>
 
-      {/* Mobile Menu */}
-      {menuOpen && (
-        <div
-          className="md:hidden border-t"
-          style={{ background: 'rgba(6,8,15,0.95)', backdropFilter: 'blur(20px)', borderColor: 'rgba(255,255,255,0.06)' }}
-        >
-          <div className="px-6 py-4 flex flex-col gap-1">
-            {navLinks.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                onClick={() => setMenuOpen(false)}
-                className="px-4 py-3 text-sm font-medium text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
-              >
-                {link.label}
-              </a>
+        {/* Phase instruction */}
+        {isActive && (
+          <motion.p
+            key={phase}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-sm text-neutral-300 text-center"
+          >
+            {currentPhaseData.instruction}
+          </motion.p>
+        )}
+
+        {/* Cycle counter */}
+        {isActive && (
+          <div className="flex items-center gap-2">
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className={`w-2 h-2 rounded-full transition-all ${i < cycle ? 'bg-emerald-400' : 'bg-white/20'}`} />
             ))}
-            <div className="mt-3 pt-3 border-t flex flex-col gap-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-              <Link href="/sign-up-login-screen" className="px-4 py-3 text-sm font-medium text-white/70 hover:text-white text-center rounded-lg hover:bg-white/5 transition-colors">
-                Login
-              </Link>
-              <Link
-                href="/sign-up-login-screen"
-                className="px-4 py-3 text-sm font-semibold text-white text-center rounded-full"
-                style={{ background: 'linear-gradient(135deg, #7C3AED, #A855F7)' }}
-              >
-                Sign Up Free
-              </Link>
-            </div>
+            <span className="text-xs text-neutral-400 ml-1">Cycle {cycle + 1} of 4</span>
           </div>
-        </div>
-      )}
-    </nav>
-  );
-}
+        )}
 
-// ─── Hero Section ────────────────────────────────────────────────────────────
-function HeroSection() {
-  return (
-    <section id="home" className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-16 text-center overflow-hidden">
-      {/* Floating badge */}
-      <div className="anim-fade-slide-up mb-8 inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold"
-        style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)', color: '#A78BFA' }}>
-        <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
-        Introducing Mira — Your AI Wellness Companion
-      </div>
-
-      {/* Headline */}
-      <h1 className="anim-fade-slide-up delay-100 font-heading font-bold text-white leading-[1.05] tracking-tight max-w-4xl"
-        style={{ fontSize: 'clamp(2.8rem, 6vw, 5rem)' }}>
-        Your mind deserves{' '}
-        <span
-          className="inline-block"
-          style={{
-            background: 'linear-gradient(135deg, #A78BFA 0%, #FB7185 50%, #F59E0B 100%)',
-            backgroundSize: '200% 200%',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            animation: 'gradientShift 4s ease infinite',
-          }}
-        >
-          better care.
-        </span>
-      </h1>
-
-      {/* Tagline */}
-      <p className="anim-fade-slide-up delay-200 mt-6 text-white/55 max-w-2xl leading-relaxed"
-        style={{ fontSize: 'clamp(1rem, 2vw, 1.2rem)' }}>
-        MindCast blends AI-powered insights, mood tracking, habit science, and journaling into one beautifully calm experience — built for the way your mind actually works.
-      </p>
-
-      {/* CTA Buttons */}
-      <div className="anim-fade-slide-up delay-300 mt-10 flex flex-wrap items-center justify-center gap-4">
-        <Link
-          href="/sign-up-login-screen"
-          className="group flex items-center gap-2.5 px-7 py-3.5 rounded-full font-semibold text-white text-sm transition-all duration-300 hover:-translate-y-1"
-          style={{
-            background: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)',
-            boxShadow: '0 8px 32px rgba(124,58,237,0.45)',
-          }}
-        >
-          Start Free
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="group-hover:translate-x-0.5 transition-transform">
-            <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </Link>
-        <button
-          className="flex items-center gap-2.5 px-7 py-3.5 rounded-full font-semibold text-white/80 text-sm transition-all duration-300 hover:text-white hover:bg-white/8 hover:-translate-y-0.5"
-          style={{ border: '1px solid rgba(255,255,255,0.12)' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M6.5 5.5l4 2.5-4 2.5V5.5z" fill="currentColor"/>
-          </svg>
-          Watch Demo
-        </button>
-      </div>
-
-      {/* Social proof */}
-      <div className="anim-fade-slide-up delay-400 mt-12 flex flex-wrap items-center justify-center gap-6 text-sm text-white/40">
-        <div className="flex items-center gap-2">
-          <div className="flex -space-x-2">
-            {['#7C3AED','#FB7185','#0EA5E9','#F59E0B'].map((c, i) => (
-              <div key={i} className="w-7 h-7 rounded-full border-2 border-[#06080F] flex items-center justify-center text-white text-xs font-bold"
-                style={{ background: c }}>
-                {['A','B','C','D'][i]}
-              </div>
-            ))}
-          </div>
-          <span>12,000+ people improving daily</span>
-        </div>
-        <div className="flex items-center gap-1">
-          {[1,2,3,4,5].map(i => (
-            <svg key={i} width="14" height="14" viewBox="0 0 14 14" fill="#F59E0B">
-              <path d="M7 1l1.5 4H13l-3.5 2.5 1.5 4L7 9 3 11.5l1.5-4L1 5h4.5z"/>
-            </svg>
-          ))}
-          <span className="ml-1">4.9 / 5 rating</span>
+        {/* Controls */}
+        <div className="flex gap-3">
+          {!isActive ? (
+            <button
+              onClick={startBreathing}
+              className="px-8 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold text-sm hover:opacity-90 transition-all shadow-lg shadow-emerald-500/20"
+            >
+              Start Box Breathing
+            </button>
+          ) : (
+            <button
+              onClick={stopBreathing}
+              className="px-8 py-3 rounded-2xl bg-white/[0.06] border border-white/10 text-neutral-300 font-semibold text-sm hover:bg-white/[0.1] transition-all"
+            >
+              Stop
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Hero Dashboard Preview */}
-      <div className="anim-fade-slide-up delay-500 mt-16 w-full max-w-5xl mx-auto relative">
-        {/* Glow behind */}
-        <div className="absolute inset-x-20 top-4 h-40 blur-3xl opacity-30 rounded-full"
-          style={{ background: 'linear-gradient(90deg, #7C3AED, #FB7185)' }} />
-        <div
-          className="relative rounded-2xl overflow-hidden"
-          style={{
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            backdropFilter: 'blur(20px)',
-          }}
-        >
-          {/* Browser chrome */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-            <div className="flex gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-red-500/60" />
-              <div className="w-3 h-3 rounded-full bg-yellow-500/60" />
-              <div className="w-3 h-3 rounded-full bg-green-500/60" />
-            </div>
-            <div className="flex-1 mx-4 h-6 rounded-md flex items-center px-3 text-xs text-white/30"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              mindcast.app/dashboard
-            </div>
+      {/* Phase indicators */}
+      <div className="grid grid-cols-4 gap-2">
+        {PHASES.map((p) => (
+          <div
+            key={p.phase}
+            className={`p-3 rounded-xl text-center transition-all ${phase === p.phase && isActive ? 'bg-white/10 border border-white/20' : 'bg-white/[0.02] border border-white/5'}`}
+          >
+            <div className="text-lg font-bold text-white">4</div>
+            <div className="text-xs text-neutral-400 mt-0.5">{p.label}</div>
           </div>
-          {/* Dashboard mockup */}
-          <div className="p-6 grid grid-cols-12 gap-4 min-h-[340px]">
-            {/* Sidebar */}
-            <div className="col-span-2 hidden md:flex flex-col gap-3">
-              {['Dashboard','Mood','Habits','Journal','Analytics'].map((item, i) => (
-                <div key={item} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
-                  style={{
-                    background: i === 0 ? 'rgba(124,58,237,0.2)' : 'transparent',
-                    color: i === 0 ? '#A78BFA' : 'rgba(255,255,255,0.35)',
-                  }}>
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: i === 0 ? '#A78BFA' : 'rgba(255,255,255,0.2)' }} />
-                  {item}
-                </div>
-              ))}
-            </div>
-            {/* Main content */}
-            <div className="col-span-12 md:col-span-10 grid grid-cols-3 gap-4">
-              {/* Wellness score */}
-              <div className="col-span-1 rounded-xl p-4 flex flex-col items-center justify-center gap-2"
-                style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
-                <div className="text-3xl font-bold font-heading text-white">87</div>
-                <div className="text-xs text-white/50">Wellness Score</div>
-                <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: '87%', background: 'linear-gradient(90deg, #7C3AED, #A78BFA)' }} />
-                </div>
-              </div>
-              {/* Mood chart */}
-              <div className="col-span-2 rounded-xl p-4"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className="text-xs text-white/40 mb-3">Mood Trend — 7 days</div>
-                <div className="flex items-end gap-1.5 h-16">
-                  {[60,75,55,80,70,85,90].map((h, i) => (
-                    <div key={i} className="flex-1 rounded-t-sm transition-all"
-                      style={{
-                        height: `${h}%`,
-                        background: `linear-gradient(to top, #7C3AED, #FB7185)`,
-                        opacity: 0.6 + i * 0.06,
-                      }} />
-                  ))}
-                </div>
-              </div>
-              {/* Habit rings */}
-              <div className="col-span-3 rounded-xl p-4 flex items-center gap-4"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className="text-xs text-white/40 mr-2">Today's Habits</div>
-                {[
-                  { label: 'Meditate', pct: 100, color: '#7C3AED' },
-                  { label: 'Exercise', pct: 75, color: '#FB7185' },
-                  { label: 'Journal', pct: 100, color: '#0EA5E9' },
-                  { label: 'Sleep', pct: 60, color: '#F59E0B' },
-                ].map((h) => (
-                  <div key={h.label} className="flex flex-col items-center gap-1">
-                    <div className="relative w-10 h-10">
-                      <svg viewBox="0 0 40 40" className="w-10 h-10 -rotate-90">
-                        <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3"/>
-                        <circle cx="20" cy="20" r="16" fill="none" stroke={h.color} strokeWidth="3"
-                          strokeDasharray={`${h.pct} 100`} strokeLinecap="round"
-                          style={{ strokeDasharray: `${(h.pct / 100) * 100.5} 100.5` }}/>
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white">{h.pct}%</div>
-                    </div>
-                    <div className="text-[9px] text-white/40">{h.label}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Ticker / Social Proof ───────────────────────────────────────────────────
-function TickerSection() {
-  const items = ['Mood Tracking', 'AI Insights', 'Habit Science', 'Journal Prompts', 'Wellness DNA', 'Mira AI', 'Analytics', 'Sleep Tracking', 'Mindfulness', 'Progress Reports'];
-  const doubled = [...items, ...items];
-  return (
-    <div className="py-6 overflow-hidden border-y" style={{ borderColor: 'rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.02)' }}>
-      <div className="flex gap-8 whitespace-nowrap" style={{ animation: 'ticker 20s linear infinite' }}>
-        {doubled.map((item, i) => (
-          <span key={i} className="flex items-center gap-3 text-sm font-medium text-white/30">
-            <span className="w-1 h-1 rounded-full bg-violet-500/60" />
-            {item}
-          </span>
         ))}
       </div>
     </div>
   );
 }
 
-// ─── Product Overview ────────────────────────────────────────────────────────
-function ProductOverview() {
-  return (
-    <section id="about" className="py-28 px-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-5"
-            style={{ background: 'rgba(251,113,133,0.12)', border: '1px solid rgba(251,113,133,0.25)', color: '#FB7185' }}>
-            What is MindCast?
-          </div>
-          <h2 className="font-heading font-bold text-white mb-5" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', letterSpacing: '-0.03em' }}>
-            Mental wellness, reimagined<br />for the modern mind.
-          </h2>
-          <p className="text-white/50 max-w-2xl mx-auto leading-relaxed text-lg">
-            MindCast is not another journaling app. It's a complete mental wellness operating system — powered by AI, grounded in science, and designed to feel like a conversation with someone who truly understands you.
-          </p>
-        </div>
+// ─── Emergency Grounding Component ───────────────────────────────────────────
 
-        {/* Bento grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {/* Large card */}
-          <div className="lg:col-span-2 rounded-2xl p-8 relative overflow-hidden group cursor-default"
-            style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.18)' }}>
-            <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full opacity-20 group-hover:opacity-30 transition-opacity"
-              style={{ background: 'radial-gradient(circle, #7C3AED, transparent)' }} />
-            <div className="relative">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
-                style={{ background: 'linear-gradient(135deg, #7C3AED, #A855F7)' }}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                  <path d="M11 3C7.7 3 5 5.7 5 9c0 2.2 1.2 4.1 3 5.2V16h6v-1.8C15.8 13.1 17 11.2 17 9c0-3.3-2.7-6-6-6z" fill="white" opacity="0.9"/>
-                  <path d="M8 16h6v1.5a.5.5 0 01-.5.5h-5a.5.5 0 01-.5-.5V16z" fill="white" opacity="0.5"/>
-                </svg>
-              </div>
-              <h3 className="font-heading font-bold text-white text-xl mb-3">Your personal wellness OS</h3>
-              <p className="text-white/50 leading-relaxed">
-                Track how you feel, what you do, and how you grow — all in one place. MindCast connects the dots between your mood, habits, sleep, and energy to reveal patterns you'd never notice alone.
-              </p>
-            </div>
-          </div>
+function EmergencyGrounding() {
+  const [isActive, setIsActive] = useState(false);
+  const [step, setStep] = useState(0);
+  const [responses, setResponses] = useState<string[]>([]);
+  const [currentInput, setCurrentInput] = useState('');
 
-          {/* Tall card */}
-          <div className="rounded-2xl p-7 relative overflow-hidden group cursor-default"
-            style={{ background: 'rgba(251,113,133,0.07)', border: '1px solid rgba(251,113,133,0.15)' }}>
-            <div className="absolute -bottom-8 -right-8 w-36 h-36 rounded-full opacity-15"
-              style={{ background: 'radial-gradient(circle, #FB7185, transparent)' }} />
-            <div className="relative">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
-                style={{ background: 'linear-gradient(135deg, #FB7185, #F43F5E)' }}>
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                  <path d="M9 2l1.8 5.4H17l-4.6 3.3 1.8 5.4L9 13l-5.2 3.1 1.8-5.4L1 7.4h6.2z" fill="white"/>
-                </svg>
-              </div>
-              <h3 className="font-heading font-bold text-white text-lg mb-2">Science-backed</h3>
-              <p className="text-white/50 text-sm leading-relaxed">
-                Built on CBT, positive psychology, and habit loop research. Every feature is designed to create lasting change.
-              </p>
-            </div>
-          </div>
-
-          {/* Stats cards */}
-          {[
-            { value: '94%', label: 'of users report improved mood within 2 weeks', color: '#0EA5E9' },
-            { value: '3×', label: 'more likely to maintain habits with AI accountability', color: '#F59E0B' },
-            { value: '12min', label: 'average daily check-in time — fits any schedule', color: '#D946EF' },
-          ].map((stat) => (
-            <div key={stat.value} className="rounded-2xl p-7 group cursor-default"
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              <div className="font-heading font-bold text-3xl mb-2" style={{ color: stat.color }}>{stat.value}</div>
-              <p className="text-white/45 text-sm leading-relaxed">{stat.label}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Features Section ────────────────────────────────────────────────────────
-function FeaturesSection() {
-  const features = [
-    {
-      icon: '🧠',
-      title: 'Mira AI — Your Wellness Companion',
-      desc: 'Mira learns your patterns, remembers your history, and offers compassionate, evidence-based guidance whenever you need it. Not a chatbot — a companion.',
-      color: '#7C3AED',
-      size: 'large',
-    },
-    {
-      icon: '🌡️',
-      title: 'Mood Intelligence',
-      desc: 'Log how you feel in seconds. Mira identifies triggers, patterns, and correlations across your entire wellness profile.',
-      color: '#FB7185',
-      size: 'normal',
-    },
-    {
-      icon: '🔄',
-      title: 'Habit Architecture',
-      desc: 'Build habits that stick using proven loop science. Visual rings, streaks, and smart reminders keep you on track.',
-      color: '#0EA5E9',
-      size: 'normal',
-    },
-    {
-      icon: '📓',
-      title: 'Reflective Journaling',
-      desc: 'AI-guided prompts that meet you where you are. Sentiment analysis reveals emotional themes over time.',
-      color: '#F59E0B',
-      size: 'normal',
-    },
-    {
-      icon: '🧬',
-      title: 'Wellness DNA',
-      desc: 'A living profile of your mental and physical health across 7 dimensions — updated daily as you check in.',
-      color: '#D946EF',
-      size: 'normal',
-    },
-    {
-      icon: '📊',
-      title: 'Deep Analytics',
-      desc: 'Beautiful charts and insights that show your growth over days, weeks, and months. Know yourself better.',
-      color: '#10B981',
-      size: 'normal',
-    },
+  const GROUNDING_STEPS = [
+    { num: 5, sense: 'SEE', prompt: 'Name 5 things you can see right now', emoji: '👁️', color: '#10b981' },
+    { num: 4, sense: 'TOUCH', prompt: 'Name 4 things you can physically feel or touch', emoji: '🤲', color: '#0ea5e9' },
+    { num: 3, sense: 'HEAR', prompt: 'Name 3 things you can hear right now', emoji: '👂', color: '#8b5cf6' },
+    { num: 2, sense: 'SMELL', prompt: 'Name 2 things you can smell (or like to smell)', emoji: '👃', color: '#f59e0b' },
+    { num: 1, sense: 'TASTE', prompt: 'Name 1 thing you can taste right now', emoji: '👅', color: '#ec4899' },
   ];
 
-  return (
-    <section id="features" className="py-28 px-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-5"
-            style={{ background: 'rgba(14,165,233,0.12)', border: '1px solid rgba(14,165,233,0.25)', color: '#38BDF8' }}>
-            Features
-          </div>
-          <h2 className="font-heading font-bold text-white mb-4" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', letterSpacing: '-0.03em' }}>
-            Everything your mind needs.
-          </h2>
-          <p className="text-white/50 max-w-xl mx-auto">Six powerful tools, one unified experience.</p>
-        </div>
+  const currentStepData = GROUNDING_STEPS[step];
+  const isComplete = step >= GROUNDING_STEPS.length;
 
-        {/* Asymmetric bento */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {/* Large feature */}
-          <div className="lg:col-span-2 lg:row-span-1 rounded-2xl p-8 relative overflow-hidden group"
-            style={{ background: `rgba(124,58,237,0.08)`, border: `1px solid rgba(124,58,237,0.2)` }}>
-            <div className="absolute top-0 right-0 w-64 h-64 opacity-10 group-hover:opacity-20 transition-opacity"
-              style={{ background: `radial-gradient(circle at top right, #7C3AED, transparent)` }} />
-            <div className="relative flex flex-col md:flex-row gap-6 items-start">
-              <div className="text-5xl">{features[0].icon}</div>
-              <div>
-                <h3 className="font-heading font-bold text-white text-xl mb-3">{features[0].title}</h3>
-                <p className="text-white/50 leading-relaxed">{features[0].desc}</p>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {['Empathetic responses', 'Memory across sessions', 'Evidence-based guidance', 'Available 24/7'].map(tag => (
-                    <span key={tag} className="px-3 py-1 rounded-full text-xs font-medium"
-                      style={{ background: 'rgba(124,58,237,0.15)', color: '#A78BFA' }}>{tag}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Normal features */}
-          {features.slice(1).map((f) => (
-            <div key={f.title} className="rounded-2xl p-7 relative overflow-hidden group cursor-default transition-all duration-300 hover:-translate-y-1"
-              style={{ background: `rgba(255,255,255,0.03)`, border: `1px solid rgba(255,255,255,0.07)` }}>
-              <div className="absolute -bottom-6 -right-6 w-24 h-24 rounded-full opacity-0 group-hover:opacity-15 transition-opacity"
-                style={{ background: `radial-gradient(circle, ${f.color}, transparent)` }} />
-              <div className="text-3xl mb-4">{f.icon}</div>
-              <h3 className="font-heading font-semibold text-white text-base mb-2">{f.title}</h3>
-              <p className="text-white/45 text-sm leading-relaxed">{f.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── How It Works ────────────────────────────────────────────────────────────
-function HowItWorks() {
-  const steps = [
-    { num: '01', title: 'Check in daily', desc: 'A 2-minute mood and energy check-in sets the tone. Mira notices patterns you miss.', color: '#7C3AED' },
-    { num: '02', title: 'Build your habits', desc: 'Choose from science-backed habits or create your own. Visual rings track your streaks.', color: '#FB7185' },
-    { num: '03', title: 'Reflect and journal', desc: 'AI prompts guide your writing. Sentiment analysis reveals emotional themes over time.', color: '#0EA5E9' },
-    { num: '04', title: 'Grow with insights', desc: 'Weekly reports and Mira\'s analysis show exactly how you\'re improving — and where to focus.', color: '#F59E0B' },
-  ];
-
-  return (
-    <section className="py-28 px-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-5"
-            style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', color: '#FCD34D' }}>
-            How it works
-          </div>
-          <h2 className="font-heading font-bold text-white mb-4" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', letterSpacing: '-0.03em' }}>
-            Four steps to a clearer mind.
-          </h2>
-        </div>
-
-        {/* Horizontal cards — not a vertical timeline */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {steps.map((step, i) => (
-            <div key={step.num}
-              className="relative rounded-2xl p-7 group cursor-default transition-all duration-300 hover:-translate-y-2"
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              {/* Connector line */}
-              {i < steps.length - 1 && (
-                <div className="hidden lg:block absolute top-12 -right-2.5 w-5 h-px z-10"
-                  style={{ background: 'rgba(255,255,255,0.1)' }} />
-              )}
-              <div className="font-heading font-bold text-4xl mb-4 opacity-20" style={{ color: step.color }}>{step.num}</div>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-5"
-                style={{ background: `${step.color}20`, border: `1px solid ${step.color}30` }}>
-                <div className="w-3 h-3 rounded-full" style={{ background: step.color }} />
-              </div>
-              <h3 className="font-heading font-semibold text-white text-base mb-2">{step.title}</h3>
-              <p className="text-white/45 text-sm leading-relaxed">{step.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Mira AI Showcase ────────────────────────────────────────────────────────
-function MiraShowcase() {
-  const messages = [
-    { role: 'user', text: "I\'ve been feeling anxious about work lately." },
-    { role: 'mira', text: "I noticed your stress scores have been elevated for 5 days. Let's explore what's driving this — is it a specific project, or more of a general feeling?" },
-    { role: 'user', text: "It\'s the presentation on Friday. I keep overthinking it." },
-    { role: 'mira', text: "That makes sense. Your journal from last month shows you felt the same before your Q2 review — and you rated it 8/10 afterward. You\'re more prepared than you feel right now. Want to try a 3-minute grounding exercise?" },
-  ];
-
-  return (
-    <section className="py-28 px-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          {/* Left: copy */}
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-6"
-              style={{ background: 'rgba(217,70,239,0.12)', border: '1px solid rgba(217,70,239,0.25)', color: '#E879F9' }}>
-              Meet Mira
-            </div>
-            <h2 className="font-heading font-bold text-white mb-5" style={{ fontSize: 'clamp(2rem, 3.5vw, 2.8rem)', letterSpacing: '-0.03em' }}>
-              An AI that actually<br />
-              <span style={{ color: '#A78BFA' }}>remembers you.</span>
-            </h2>
-            <p className="text-white/50 leading-relaxed mb-8 text-lg">
-              Mira isn't just a chatbot. She reads your mood history, journal entries, and habit data to give you advice that's actually relevant to your life — not generic wellness tips.
-            </p>
-            <div className="flex flex-col gap-4">
-              {[
-                { icon: '🧠', text: 'Remembers your history across every session' },
-                { icon: '💬', text: 'Responds with empathy, not scripts' },
-                { icon: '📈', text: 'Connects patterns across mood, habits, and journal' },
-                { icon: '🔒', text: 'Your data stays private — always' },
-              ].map((item) => (
-                <div key={item.text} className="flex items-center gap-3">
-                  <span className="text-xl">{item.icon}</span>
-                  <span className="text-white/60 text-sm">{item.text}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Right: chat UI */}
-          <div className="relative">
-            <div className="absolute inset-0 blur-3xl opacity-20 rounded-3xl"
-              style={{ background: 'linear-gradient(135deg, #7C3AED, #D946EF)' }} />
-            <div className="relative rounded-2xl overflow-hidden"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)' }}>
-              {/* Chat header */}
-              <div className="flex items-center gap-3 px-5 py-4 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
-                  style={{ background: 'linear-gradient(135deg, #7C3AED, #D946EF)' }}>M</div>
-                <div>
-                  <div className="text-sm font-semibold text-white">Mira</div>
-                  <div className="flex items-center gap-1.5 text-xs text-white/40">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                    Online — here for you
-                  </div>
-                </div>
-              </div>
-              {/* Messages */}
-              <div className="p-5 flex flex-col gap-4">
-                {messages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed"
-                      style={msg.role === 'user'
-                        ? { background: 'rgba(124,58,237,0.25)', color: 'rgba(255,255,255,0.85)', borderBottomRightRadius: '4px' }
-                        : { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.75)', borderBottomLeftRadius: '4px' }
-                      }
-                    >
-                      {msg.text}
-                    </div>
-                  </div>
-                ))}
-                {/* Typing indicator */}
-                <div className="flex justify-start">
-                  <div className="px-4 py-3 rounded-2xl flex items-center gap-1.5"
-                    style={{ background: 'rgba(255,255,255,0.06)', borderBottomLeftRadius: '4px' }}>
-                    {[0,1,2].map(i => (
-                      <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/40"
-                        style={{ animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-              {/* Input */}
-              <div className="px-5 pb-5">
-                <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <span className="text-white/25 text-sm flex-1">Talk to Mira...</span>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center"
-                    style={{ background: 'linear-gradient(135deg, #7C3AED, #A855F7)' }}>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 6h8M6 2l4 4-4 4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Wellness DNA Section ────────────────────────────────────────────────────
-function WellnessDNASection() {
-  const dimensions = [
-    { label: 'Emotional', score: 82, color: '#7C3AED' },
-    { label: 'Physical', score: 74, color: '#FB7185' },
-    { label: 'Mental', score: 88, color: '#0EA5E9' },
-    { label: 'Social', score: 65, color: '#F59E0B' },
-    { label: 'Purpose', score: 79, color: '#D946EF' },
-    { label: 'Sleep', score: 71, color: '#10B981' },
-    { label: 'Resilience', score: 85, color: '#F97316' },
-  ];
-
-  return (
-    <section className="py-28 px-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          {/* Left: DNA visualization */}
-          <div className="relative">
-            <div className="absolute inset-0 blur-3xl opacity-15 rounded-3xl"
-              style={{ background: 'linear-gradient(135deg, #D946EF, #7C3AED)' }} />
-            <div className="relative rounded-2xl p-8"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              {/* Score ring */}
-              <div className="flex items-center gap-6 mb-8">
-                <div className="relative w-24 h-24 flex-shrink-0">
-                  <svg viewBox="0 0 96 96" className="w-24 h-24 -rotate-90">
-                    <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6"/>
-                    <circle cx="48" cy="48" r="40" fill="none" strokeWidth="6" strokeLinecap="round"
-                      stroke="url(#dnaGrad)"
-                      strokeDasharray="213.6"
-                      strokeDashoffset={213.6 * (1 - 0.78)}
-                    />
-                    <defs>
-                      <linearGradient id="dnaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#7C3AED"/>
-                        <stop offset="100%" stopColor="#D946EF"/>
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="font-heading font-bold text-2xl text-white">78</div>
-                    <div className="text-[10px] text-white/40">DNA Score</div>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="font-heading font-bold text-white text-lg mb-1">Your Wellness DNA</h3>
-                  <p className="text-white/45 text-sm">7 dimensions, updated daily</p>
-                </div>
-              </div>
-              {/* Dimension bars */}
-              <div className="flex flex-col gap-3">
-                {dimensions.map((d) => (
-                  <div key={d.label} className="flex items-center gap-3">
-                    <div className="w-20 text-xs text-white/50 text-right">{d.label}</div>
-                    <div className="flex-1 h-2 rounded-full bg-white/6 overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-1000"
-                        style={{ width: `${d.score}%`, background: d.color, opacity: 0.8 }} />
-                    </div>
-                    <div className="w-8 text-xs text-white/40 font-medium">{d.score}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Right: copy */}
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-6"
-              style={{ background: 'rgba(217,70,239,0.12)', border: '1px solid rgba(217,70,239,0.25)', color: '#E879F9' }}>
-              Wellness DNA
-            </div>
-            <h2 className="font-heading font-bold text-white mb-5" style={{ fontSize: 'clamp(2rem, 3.5vw, 2.8rem)', letterSpacing: '-0.03em' }}>
-              Know yourself<br />
-              <span style={{ color: '#D946EF' }}>across 7 dimensions.</span>
-            </h2>
-            <p className="text-white/50 leading-relaxed mb-8 text-lg">
-              Your Wellness DNA is a living profile that evolves as you check in. It maps your emotional, physical, mental, social, and spiritual health — giving you a complete picture of who you are and where to grow.
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { label: 'Personalized', desc: 'Unique to your data' },
-                { label: 'Dynamic', desc: 'Updates every day' },
-                { label: 'Actionable', desc: 'Mira guides improvement' },
-                { label: 'Private', desc: 'Only you can see it' },
-              ].map((item) => (
-                <div key={item.label} className="rounded-xl p-4"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div className="font-semibold text-white text-sm mb-1">{item.label}</div>
-                  <div className="text-white/40 text-xs">{item.desc}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Feature Previews (Mood, Habit, Journal) ─────────────────────────────────
-function FeaturePreviews() {
-  const [active, setActive] = useState(0);
-  const tabs = [
-    {
-      label: 'Mood Tracker',
-      icon: '🌡️',
-      color: '#FB7185',
-      preview: (
-        <div className="p-6">
-          <div className="text-sm text-white/40 mb-4">How are you feeling today?</div>
-          <div className="flex gap-3 mb-6">
-            {['😔','😐','🙂','😊','🤩'].map((e, i) => (
-              <div key={i} className={`flex-1 aspect-square rounded-2xl flex items-center justify-center text-2xl cursor-pointer transition-all hover:scale-110 ${i === 3 ? 'ring-2 ring-rose-400 scale-110' : ''}`}
-                style={{ background: i === 3 ? 'rgba(251,113,133,0.2)' : 'rgba(255,255,255,0.04)' }}>
-                {e}
-              </div>
-            ))}
-          </div>
-          <div className="text-xs text-white/30 mb-2">Energy Level</div>
-          <div className="h-2 rounded-full bg-white/6 mb-4 overflow-hidden">
-            <div className="h-full rounded-full w-3/4" style={{ background: 'linear-gradient(90deg, #FB7185, #F43F5E)' }} />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {['Work stress','Good sleep','Exercise','Social'].map(t => (
-              <span key={t} className="px-3 py-1 rounded-full text-xs"
-                style={{ background: 'rgba(251,113,133,0.12)', color: '#FB7185', border: '1px solid rgba(251,113,133,0.2)' }}>{t}</span>
-            ))}
-          </div>
-        </div>
-      ),
-    },
-    {
-      label: 'Habit Tracker',
-      icon: '🔄',
-      color: '#0EA5E9',
-      preview: (
-        <div className="p-6">
-          <div className="text-sm text-white/40 mb-5">Today's habits</div>
-          <div className="flex flex-col gap-3">
-            {[
-              { name: 'Morning meditation', done: true, streak: 12 },
-              { name: '30min exercise', done: true, streak: 7 },
-              { name: 'Read 20 pages', done: false, streak: 4 },
-              { name: 'No screens after 10pm', done: false, streak: 3 },
-            ].map((h) => (
-              <div key={h.name} className="flex items-center gap-3 p-3 rounded-xl"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${h.done ? '' : 'border border-white/20'}`}
-                  style={h.done ? { background: '#0EA5E9' } : {}}>
-                  {h.done && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>}
-                </div>
-                <span className={`text-sm flex-1 ${h.done ? 'text-white/70 line-through' : 'text-white/80'}`}>{h.name}</span>
-                <span className="text-xs text-white/30">🔥 {h.streak}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ),
-    },
-    {
-      label: 'Journal',icon: '📓',color: '#F59E0B',
-      preview: (
-        <div className="p-6">
-          <div className="text-sm text-white/40 mb-2">Today's reflection</div>
-          <div className="text-xs text-white/25 mb-4 italic">"What made you feel most alive today?"</div>
-          <div className="rounded-xl p-4 text-sm text-white/60 leading-relaxed mb-4"
-            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', minHeight: '100px' }}>
-            Today I finally finished the presentation I've been dreading. The moment I hit send, I felt this wave of relief wash over me. Mira reminded me that I always feel this way before big moments — and she was right...
-          </div>
-          <div className="flex items-center justify-between text-xs text-white/30">
-            <span>142 words · 3 min read</span>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-green-400" />
-              <span>Positive sentiment</span>
-            </div>
-          </div>
-        </div>
-      ),
-    },
-  ];
-
-  return (
-    <section className="py-28 px-6">
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-12">
-          <h2 className="font-heading font-bold text-white mb-4" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', letterSpacing: '-0.03em' }}>
-            Built for real life.
-          </h2>
-          <p className="text-white/50 max-w-xl mx-auto">Three tools, one seamless experience.</p>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex justify-center gap-2 mb-8">
-          {tabs.map((tab, i) => (
-            <button key={tab.label} onClick={() => setActive(i)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200"
-              style={active === i
-                ? { background: `${tab.color}20`, color: tab.color, border: `1px solid ${tab.color}40` }
-                : { color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.08)' }
-              }>
-              <span>{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Preview */}
-        <div className="rounded-2xl overflow-hidden"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          {/* Browser chrome */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-            <div className="flex gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
-              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
-              <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
-            </div>
-            <div className="text-xs text-white/25 ml-2">mindcast.app/{tabs[active].label.toLowerCase().replace(' ', '-')}</div>
-          </div>
-          {tabs[active].preview}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Analytics Preview ───────────────────────────────────────────────────────
-function AnalyticsPreview() {
-  return (
-    <section className="py-28 px-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-5"
-            style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', color: '#34D399' }}>
-            Analytics
-          </div>
-          <h2 className="font-heading font-bold text-white mb-4" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', letterSpacing: '-0.03em' }}>
-            See your growth in numbers.
-          </h2>
-          <p className="text-white/50 max-w-xl mx-auto">Beautiful charts that make your progress impossible to ignore.</p>
-        </div>
-
-        <div className="rounded-2xl overflow-hidden"
-          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-            <div className="font-heading font-semibold text-white">Analytics Dashboard</div>
-            <div className="flex gap-2">
-              {['7D','30D','90D'].map((p, i) => (
-                <button key={p} className="px-3 py-1 rounded-lg text-xs font-medium transition-colors"
-                  style={i === 1 ? { background: 'rgba(124,58,237,0.2)', color: '#A78BFA' } : { color: 'rgba(255,255,255,0.3)' }}>
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {[
-              { label: 'Avg Mood', value: '7.8', change: '+0.4', color: '#FB7185' },
-              { label: 'Habit Rate', value: '84%', change: '+12%', color: '#0EA5E9' },
-              { label: 'Journal Streak', value: '14d', change: '+3d', color: '#F59E0B' },
-              { label: 'Wellness Score', value: '87', change: '+5', color: '#7C3AED' },
-            ].map((stat) => (
-              <div key={stat.label} className="rounded-xl p-4"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div className="text-xs text-white/40 mb-2">{stat.label}</div>
-                <div className="font-heading font-bold text-2xl text-white mb-1">{stat.value}</div>
-                <div className="text-xs font-medium" style={{ color: stat.color }}>{stat.change} this month</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Chart area */}
-          <div className="px-6 pb-6">
-            <div className="rounded-xl p-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <div className="text-xs text-white/30 mb-4">Mood & Energy — 30 days</div>
-              <div className="flex items-end gap-1 h-32">
-                {Array.from({ length: 30 }, (_, i) => ({
-                  mood: 50 + Math.sin(i * 0.4) * 25 + ((i * 7 + 3) % 15),
-                  energy: 45 + Math.cos(i * 0.3) * 20 + ((i * 11 + 5) % 15),
-                })).map((d, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-                    <div className="w-full rounded-t-sm opacity-70" style={{ height: `${d.mood}%`, background: '#7C3AED' }} />
-                  </div>
-                ))}
-              </div>
-              <div className="flex items-center gap-4 mt-3">
-                <div className="flex items-center gap-1.5 text-xs text-white/30">
-                  <div className="w-3 h-1.5 rounded-full bg-violet-500" />Mood
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Security & Privacy ──────────────────────────────────────────────────────
-function SecuritySection() {
-  return (
-    <section className="py-28 px-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="rounded-3xl p-12 md:p-16 relative overflow-hidden"
-          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-          <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full opacity-10"
-            style={{ background: 'radial-gradient(circle, #10B981, transparent)' }} />
-          <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-6"
-                style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', color: '#34D399' }}>
-                🔒 Security & Privacy
-              </div>
-              <h2 className="font-heading font-bold text-white mb-5" style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.6rem)', letterSpacing: '-0.03em' }}>
-                Your mental health data<br />
-                <span style={{ color: '#34D399' }}>is sacred to us.</span>
-              </h2>
-              <p className="text-white/50 leading-relaxed text-lg">
-                We built MindCast with privacy as a first principle — not an afterthought. Your data is encrypted, never sold, and always under your control.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { icon: '🔐', title: 'End-to-end encryption', desc: 'All data encrypted at rest and in transit' },
-                { icon: '🚫', title: 'Zero data selling', desc: 'We never sell or share your personal data' },
-                { icon: '🗑️', title: 'Delete anytime', desc: 'Full data deletion on request, instantly' },
-                { icon: '🌍', title: 'GDPR compliant', desc: 'Full compliance with global privacy laws' },
-                { icon: '🔑', title: 'You own your data', desc: 'Export everything, anytime, in any format' },
-                { icon: '👁️', title: 'No ads, ever', desc: 'Your wellness data is never used for ads' },
-              ].map((item) => (
-                <div key={item.title} className="rounded-xl p-4"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div className="text-xl mb-2">{item.icon}</div>
-                  <div className="font-semibold text-white text-sm mb-1">{item.title}</div>
-                  <div className="text-white/40 text-xs">{item.desc}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── FAQ ─────────────────────────────────────────────────────────────────────
-function FAQSection() {
-  const [open, setOpen] = useState<number | null>(0);
-  const faqs = [
-    { q: 'Is MindCast free to use?', a: 'Yes — MindCast has a generous free tier that includes mood tracking, basic habit tracking, and limited Mira conversations. Premium plans unlock unlimited AI, advanced analytics, and Wellness DNA.' },
-    { q: 'How is Mira different from other AI chatbots?', a: 'Mira is trained specifically for mental wellness and has access to your personal data (with your permission) — your mood history, journal entries, and habits. This lets her give advice that\'s actually relevant to your life, not generic tips.' },
-    { q: 'Is my data private and secure?', a: 'Absolutely. All data is encrypted end-to-end. We never sell your data, never use it for advertising, and you can delete everything at any time. We\'re fully GDPR compliant.' },
-    { q: 'Can MindCast replace therapy?', a: 'No — and we\'re clear about that. MindCast is a wellness tool, not a clinical service. Mira is not a therapist. We always encourage professional support for serious mental health concerns and provide resources to find help.' },
-    { q: 'What devices does MindCast work on?', a: 'MindCast is a web app that works beautifully on any device — desktop, tablet, or mobile. Native iOS and Android apps are coming soon.' },
-    { q: 'How long does the daily check-in take?', a: 'Most users complete their daily check-in in under 3 minutes. The full journaling and habit review takes about 10-15 minutes if you want to go deeper.' },
-  ];
-
-  return (
-    <section id="faq" className="py-28 px-6">
-      <div className="max-w-3xl mx-auto">
-        <div className="text-center mb-14">
-          <h2 className="font-heading font-bold text-white mb-4" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', letterSpacing: '-0.03em' }}>
-            Frequently asked questions.
-          </h2>
-          <p className="text-white/50">Everything you need to know before you start.</p>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          {faqs.map((faq, i) => (
-            <div key={i}
-              className="rounded-2xl overflow-hidden transition-all duration-200 cursor-pointer"
-              style={{ background: open === i ? 'rgba(124,58,237,0.08)' : 'rgba(255,255,255,0.03)', border: open === i ? '1px solid rgba(124,58,237,0.2)' : '1px solid rgba(255,255,255,0.07)' }}
-              onClick={() => setOpen(open === i ? null : i)}>
-              <div className="flex items-center justify-between px-6 py-5">
-                <span className="font-semibold text-white text-sm pr-4">{faq.q}</span>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-transform duration-200 ${open === i ? 'rotate-45' : ''}`}
-                  style={{ background: open === i ? 'rgba(124,58,237,0.3)' : 'rgba(255,255,255,0.06)' }}>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M6 2v8M2 6h8" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
-                  </svg>
-                </div>
-              </div>
-              {open === i && (
-                <div className="px-6 pb-5 text-white/50 text-sm leading-relaxed">{faq.a}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Contact Section ─────────────────────────────────────────────────────────
-function ContactSection() {
-  const [form, setForm] = useState({ name: '', email: '', message: '' });
-  const [sent, setSent] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSent(true);
+  const handleNext = () => {
+    if (currentInput.trim()) {
+      setResponses(prev => [...prev, currentInput.trim()]);
+      setCurrentInput('');
+      setStep(s => s + 1);
+    }
   };
 
-  return (
-    <section id="contact" className="py-28 px-6">
-      <div className="max-w-5xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
-          {/* Left */}
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-6"
-              style={{ background: 'rgba(14,165,233,0.12)', border: '1px solid rgba(14,165,233,0.25)', color: '#38BDF8' }}>
-              Get in touch
-            </div>
-            <h2 className="font-heading font-bold text-white mb-5" style={{ fontSize: 'clamp(2rem, 3.5vw, 2.8rem)', letterSpacing: '-0.03em' }}>
-              We'd love to<br />hear from you.
-            </h2>
-            <p className="text-white/50 leading-relaxed mb-10">
-              Questions, feedback, or just want to say hi? Our team typically responds within a few hours.
-            </p>
-            <div className="flex flex-col gap-5">
-              {[
-                { icon: '📧', label: 'Email', value: 'hello@mindcast.app' },
-                { icon: '🐦', label: 'Twitter', value: '@mindcastapp' },
-                { icon: '💬', label: 'Discord', value: 'discord.gg/mindcast' },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    {item.icon}
-                  </div>
-                  <div>
-                    <div className="text-xs text-white/30 mb-0.5">{item.label}</div>
-                    <div className="text-sm text-white/70">{item.value}</div>
-                  </div>
-                </div>
-              ))}
+  const handleReset = () => {
+    setIsActive(false);
+    setStep(0);
+    setResponses([]);
+    setCurrentInput('');
+  };
+
+  if (!isActive) {
+    return (
+      <div className="space-y-4">
+        <div className="p-6 rounded-2xl bg-gradient-to-br from-rose-500/10 to-orange-500/5 border border-rose-500/20 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🆘</span>
+            <div>
+              <h4 className="font-bold text-white text-sm">5-4-3-2-1 Grounding Technique</h4>
+              <p className="text-xs text-neutral-400">Clinically proven to interrupt anxiety spirals and panic attacks</p>
             </div>
           </div>
+          <p className="text-xs text-neutral-300 leading-relaxed">
+            This technique anchors you to the present moment by engaging all five senses, interrupting the anxiety feedback loop in your nervous system.
+          </p>
+        </div>
+        <button
+          onClick={() => setIsActive(true)}
+          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 to-orange-600 text-white font-semibold text-sm hover:opacity-90 transition-all shadow-lg shadow-rose-500/20"
+        >
+          🆘 Activate Emergency Grounding
+        </button>
+      </div>
+    );
+  }
 
-          {/* Right: form */}
-          <div className="rounded-2xl p-8"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            {sent ? (
-              <div className="h-full flex flex-col items-center justify-center text-center gap-4 py-12">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl"
-                  style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)' }}>✓</div>
-                <h3 className="font-heading font-bold text-white text-xl">Message sent!</h3>
-                <p className="text-white/50 text-sm">We'll get back to you within a few hours.</p>
-                <button onClick={() => setSent(false)} className="text-sm text-violet-400 hover:text-violet-300 transition-colors">Send another</button>
+  if (isComplete) {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-4">
+        <div className="p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-3">
+          <div className="text-4xl">✨</div>
+          <h4 className="font-bold text-white">Grounding Complete</h4>
+          <p className="text-sm text-neutral-300 leading-relaxed">
+            You've successfully anchored yourself to the present moment. Your nervous system is resetting. Take a slow, deep breath and notice how you feel now.
+          </p>
+        </div>
+        <div className="space-y-2">
+          {GROUNDING_STEPS.map((s, i) => (
+            <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+              <span className="text-lg">{s.emoji}</span>
+              <div>
+                <span className="text-xs font-semibold text-neutral-400">{s.sense}: </span>
+                <span className="text-xs text-neutral-200">{responses[i]}</span>
               </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            </div>
+          ))}
+        </div>
+        <button onClick={handleReset} className="w-full py-3 rounded-xl bg-white/[0.04] border border-white/10 text-neutral-300 text-sm font-semibold hover:bg-white/[0.08] transition-all">
+          Close
+        </button>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div key={step} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
+      {/* Progress */}
+      <div className="flex items-center gap-2">
+        {GROUNDING_STEPS.map((_, i) => (
+          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all ${i < step ? 'bg-emerald-400' : i === step ? 'bg-white/40' : 'bg-white/10'}`} />
+        ))}
+      </div>
+
+      {/* Current step */}
+      <div className="p-6 rounded-2xl text-center space-y-3" style={{ background: `${currentStepData.color}10`, border: `1px solid ${currentStepData.color}30` }}>
+        <div className="text-4xl">{currentStepData.emoji}</div>
+        <div className="text-xs font-mono font-bold tracking-widest" style={{ color: currentStepData.color }}>
+          {currentStepData.num} — {currentStepData.sense}
+        </div>
+        <p className="text-sm text-white font-medium">{currentStepData.prompt}</p>
+      </div>
+
+      <textarea
+        value={currentInput}
+        onChange={e => setCurrentInput(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleNext(); } }}
+        placeholder="Type your response here..."
+        rows={2}
+        className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors resize-none"
+      />
+
+      <button
+        onClick={handleNext}
+        disabled={!currentInput.trim()}
+        className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-black font-semibold text-sm transition-all"
+      >
+        Next →
+      </button>
+    </motion.div>
+  );
+}
+
+// ─── Assessment Result Component ─────────────────────────────────────────────
+
+function AssessmentResult({ answers, tier, onRetake }: { answers: Record<string, number>; tier: AssessmentTier; onRetake: () => void }) {
+  const questions = TIER_CONFIG[tier].questions;
+  const totalScore = Object.values(answers).reduce((a, b) => a + b, 0);
+  const maxScore = questions.length * 4;
+  const percentage = Math.round((totalScore / maxScore) * 100);
+
+  const categories = questions.reduce((acc, q) => {
+    if (!acc[q.category]) acc[q.category] = { total: 0, max: 0 };
+    acc[q.category].total += answers[q.id] ?? 0;
+    acc[q.category].max += 4;
+    return acc;
+  }, {} as Record<string, { total: number; max: number }>);
+
+  const getLevel = (pct: number) => pct >= 75 ? { label: 'Strong', color: 'text-emerald-400', bg: 'bg-emerald-500/20' } : pct >= 50 ? { label: 'Moderate', color: 'text-amber-400', bg: 'bg-amber-500/20' } : { label: 'Needs Attention', color: 'text-rose-400', bg: 'bg-rose-500/20' };
+
+  const overall = getLevel(percentage);
+
+  const aiSummary = percentage >= 75
+    ? `Your psychological profile indicates strong mental resilience and effective coping mechanisms. Your stress management, emotional regulation, and recovery patterns are well-calibrated. Continue your current wellness practices and consider deepening your mindfulness routine to maintain this trajectory.`
+    : percentage >= 50
+    ? `Your assessment reveals a mixed psychological landscape with notable strengths alongside areas requiring attention. You demonstrate resilience in some domains while experiencing moderate challenges in others. Prioritize consistent sleep hygiene, daily stress-release practices, and strengthening your social support network.`
+    : `Your results indicate significant psychological load across multiple dimensions. This is important data — not a judgment. Your nervous system is signaling that it needs support. Please consider speaking with a mental health professional. In the meantime, focus on foundational recovery: sleep, gentle movement, and one small act of self-compassion daily.`;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      {/* Overall Score */}
+      <div className="p-8 rounded-3xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/20 text-center space-y-3">
+        <span className="text-xs font-mono tracking-widest text-emerald-400 uppercase">Assessment Complete — Tier {tier}</span>
+        <div className="text-6xl font-extrabold text-white">{percentage}<span className="text-2xl text-neutral-400">/100</span></div>
+        <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold ${overall.bg} ${overall.color}`}>
+          {overall.label} Psychological State
+        </div>
+      </div>
+
+      {/* Category Breakdown */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-neutral-300 uppercase tracking-wider">Category Breakdown</h3>
+        {Object.entries(categories).slice(0, 8).map(([cat, data]) => {
+          const pct = Math.round((data.total / data.max) * 100);
+          const level = getLevel(pct);
+          return (
+            <div key={cat} className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-300 font-medium">{cat}</span>
+                <span className={level.color}>{pct}% — {level.label}</span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{ duration: 0.8, ease: 'easeOut', delay: 0.1 }}
+                  className={`h-full rounded-full ${pct >= 75 ? 'bg-emerald-400' : pct >= 50 ? 'bg-amber-400' : 'bg-rose-400'}`}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* AI Diagnostic Summary */}
+      <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-lg bg-emerald-500/20 flex items-center justify-center text-xs">🤖</div>
+          <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">MIRA AI Diagnostic Summary</span>
+        </div>
+        <p className="text-sm text-neutral-200 leading-relaxed">{aiSummary}</p>
+      </div>
+
+      <button onClick={onRetake} className="w-full py-3 rounded-xl bg-white/[0.04] border border-white/10 text-neutral-300 text-sm font-semibold hover:bg-white/[0.08] transition-all">
+        Retake Assessment
+      </button>
+    </motion.div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export default function MindCastPlatform() {
+  const [currentView, setCurrentView] = useState<View>('landing');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('mira');
+
+  // MIRA Chat
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    { id: '0', sender: 'mira', text: "Hello! I'm MIRA, your Mind Intelligence & Reflective Assistant. I'm here to support your mental wellness journey with empathy and insight. How are you feeling right now?", timestamp: new Date() }
+  ]);
+  const [userInput, setUserInput] = useState('');
+  const [isMiraTyping, setIsMiraTyping] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Assessment
+  const [selectedTier, setSelectedTier] = useState<AssessmentTier | null>(null);
+  const [assessmentStep, setAssessmentStep] = useState(0);
+  const [assessmentAnswers, setAssessmentAnswers] = useState<Record<string, number>>({});
+  const [assessmentComplete, setAssessmentComplete] = useState(false);
+
+  // Mood
+  const [selectedMood, setSelectedMood] = useState('');
+  const [moodHistory, setMoodHistory] = useState<MoodEntry[]>([
+    { id: '1', day: 'Monday', mood: 'Happy', emoji: '😊', time: '9:00 AM' },
+    { id: '2', day: 'Tuesday', mood: 'Calm', emoji: '🌿', time: '8:30 AM' },
+    { id: '3', day: 'Wednesday', mood: 'Stressed', emoji: '🌊', time: '10:15 AM' },
+    { id: '4', day: 'Thursday', mood: 'Excited', emoji: '✨', time: '9:45 AM' },
+    { id: '5', day: 'Friday', mood: 'Calm', emoji: '🌿', time: '8:00 AM' },
+  ]);
+
+  // Journal
+  const [journalText, setJournalText] = useState('');
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([
+    { id: '1', date: 'Aug 4, 2026', snippet: 'Felt grounded today after finishing the core UI specs. The clarity that comes from focused work is something I want to cultivate more.', tag: 'Productive', aiSummary: 'Your entry reflects a strong sense of accomplishment and a desire for intentional focus. This is a healthy growth mindset pattern.' }
+  ]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Habits
+  const [habits, setHabits] = useState<Habit[]>([
+    { id: '1', name: 'Water Intake (2L)', done: true, streak: 5, icon: '💧' },
+    { id: '2', name: '10 Min Meditation', done: false, streak: 3, icon: '🧘' },
+    { id: '3', name: 'Sleep 8 Hours', done: true, streak: 7, icon: '🌙' },
+    { id: '4', name: 'Daily Journaling', done: false, streak: 2, icon: '📓' },
+    { id: '5', name: '30 Min Exercise', done: true, streak: 4, icon: '🏃' },
+    { id: '6', name: 'No Screens 1hr Before Bed', done: false, streak: 1, icon: '📵' },
+  ]);
+
+  // Toolkit
+  const [activeToolkit, setActiveToolkit] = useState<'breathing' | 'grounding'>('breathing');
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, isMiraTyping]);
+
+  const handleAuthSubmit = (e: React.FormEvent, _type: string) => {
+    e.preventDefault();
+    if (!authEmail) return;
+    setCurrentUser({ email: authEmail, name: authEmail.split('@')[0] });
+    setCurrentView('dashboard');
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userInput.trim()) return;
+    const msgId = `msg-${Date.now()}`;
+    const newMsg: ChatMessage = { id: msgId, sender: 'user', text: userInput, timestamp: new Date() };
+    setChatMessages(prev => [...prev, newMsg]);
+    const inputCopy = userInput;
+    setUserInput('');
+    setIsMiraTyping(true);
+    setTimeout(() => {
+      setIsMiraTyping(false);
+      setChatMessages(prev => [...prev, {
+        id: `mira-${Date.now()}`,
+        sender: 'mira',
+        text: getMiraResponse(inputCopy),
+        timestamp: new Date(),
+      }]);
+    }, 1200 + Math.random() * 800);
+  };
+
+  const toggleHabit = (id: string) => {
+    setHabits(prev => prev.map(h => h.id === id ? { ...h, done: !h.done, streak: !h.done ? h.streak + 1 : Math.max(0, h.streak - 1) } : h));
+  };
+
+  const handleMoodSelect = (mood: string, emoji: string) => {
+    setSelectedMood(mood);
+    const now = new Date();
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const newEntry: MoodEntry = {
+      id: `mood-${Date.now()}`,
+      day: days[now.getDay()],
+      mood,
+      emoji,
+      time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    };
+    setMoodHistory(prev => [newEntry, ...prev.slice(0, 6)]);
+  };
+
+  const handleJournalSave = () => {
+    if (!journalText.trim()) return;
+    setIsAnalyzing(true);
+    const text = journalText;
+    setJournalText('');
+    setTimeout(() => {
+      setIsAnalyzing(false);
+      const aiSummaries = [
+        'Your reflection shows deep self-awareness and emotional intelligence. The themes of growth and challenge you describe are signs of an active, engaged mind navigating life with intention.',
+        'This entry reveals a thoughtful inner life. Your ability to articulate your experience is a powerful tool for processing emotions and building resilience.',
+        'I notice themes of perseverance and self-reflection in your writing. These are core psychological strengths. Your willingness to examine your inner world is the foundation of lasting change.',
+      ];
+      setJournalEntries(prev => [{
+        id: `j-${Date.now()}`,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        snippet: text,
+        tag: 'Reflective',
+        aiSummary: aiSummaries[Math.floor(Math.random() * aiSummaries.length)],
+      }, ...prev]);
+    }, 2000);
+  };
+
+  const handleAssessmentAnswer = (questionId: string, score: number) => {
+    const newAnswers = { ...assessmentAnswers, [questionId]: score };
+    setAssessmentAnswers(newAnswers);
+    const questions = TIER_CONFIG[selectedTier!].questions;
+    if (assessmentStep < questions.length - 1) {
+      setTimeout(() => setAssessmentStep(s => s + 1), 300);
+    } else {
+      setTimeout(() => setAssessmentComplete(true), 300);
+    }
+  };
+
+  const resetAssessment = () => {
+    setSelectedTier(null);
+    setAssessmentStep(0);
+    setAssessmentAnswers({});
+    setAssessmentComplete(false);
+  };
+
+  const completedHabits = habits.filter(h => h.done).length;
+
+  return (
+    <div className="min-h-screen bg-[#09090b] text-neutral-100 font-sans selection:bg-emerald-500/30 selection:text-emerald-200 antialiased overflow-x-hidden">
+
+      {/* ── NAVIGATION BAR ─────────────────────────────────────────────────── */}
+      <nav className="sticky top-0 z-50 backdrop-blur-2xl bg-[#09090b]/85 border-b border-white/[0.06] px-6 lg:px-12 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setCurrentView(currentUser ? 'dashboard' : 'landing')}>
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-emerald-400 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
+            M
+          </div>
+          <div>
+            <span className="font-bold tracking-tight text-base text-white">MindCast</span>
+            <span className="block text-[10px] text-emerald-400 font-mono tracking-widest uppercase">AI Wellness OS</span>
+          </div>
+        </div>
+
+        {currentView === 'landing' && (
+          <div className="hidden md:flex items-center gap-8 text-sm text-neutral-400 font-medium">
+            <a href="#features" className="hover:text-white transition-colors">Features</a>
+            <a href="#assessments" className="hover:text-white transition-colors">Assessments</a>
+            <a href="#mira" className="hover:text-white transition-colors">MIRA AI</a>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3">
+          {(currentView === 'landing' || currentView === 'login' || currentView === 'signup') && !currentUser && (
+            <>
+              <button onClick={() => setCurrentView('login')} className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white transition-all">Log In</button>
+              <button onClick={() => setCurrentView('signup')} className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-500 text-black hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20">Get Started</button>
+            </>
+          )}
+          {currentView === 'dashboard' && currentUser && (
+            <div className="flex items-center gap-4">
+              <span className="text-xs text-neutral-400 font-mono hidden sm:inline">
+                <strong className="text-emerald-300">{currentUser.name}</strong>
+              </span>
+              <button onClick={() => { setCurrentUser(null); setCurrentView('landing'); }} className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/[0.04] hover:bg-white/[0.08] text-neutral-300 border border-white/10 transition-all">
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
+      </nav>
+
+      {/* ── VIEW ROUTER ────────────────────────────────────────────────────── */}
+      <AnimatePresence mode="wait">
+
+        {/* LANDING */}
+        {currentView === 'landing' && (
+          <motion.div key="landing" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition}>
+            {/* Hero */}
+            <section className="relative px-6 lg:px-12 pt-32 pb-24 max-w-5xl mx-auto text-center flex flex-col items-center">
+              <div className="absolute inset-0 -z-10 flex items-center justify-center pointer-events-none">
+                <div className="w-[700px] h-[700px] bg-emerald-600/8 rounded-full blur-[160px]" />
+              </div>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.03] border border-white/10 text-xs text-emerald-300 mb-8 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Meet MIRA • Your Personal AI Mental Wellness OS
+              </div>
+              <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-4xl text-white leading-[1.08] mb-6">
+                Master your mind with{' '}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-white">intelligent balance</span>.
+              </h1>
+              <p className="text-neutral-400 text-base sm:text-lg max-w-2xl mb-12 font-normal leading-relaxed">
+                MindCast combines conversational AI, clinical psychological assessments, emotional analytics, habit tracking, and wellness DNA profiling into one unified operating system.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
+                <button onClick={() => setCurrentView('signup')} className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium hover:opacity-95 transition-all shadow-xl shadow-emerald-600/25 border border-emerald-400/20 text-sm">
+                  Start Your Journey Free
+                </button>
+                <button onClick={() => setCurrentView('login')} className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] text-neutral-300 border border-white/10 font-medium transition-all text-sm">
+                  Log Into Account
+                </button>
+              </div>
+            </section>
+
+            {/* Features */}
+            <section id="features" className="px-6 lg:px-12 py-24 max-w-5xl mx-auto border-t border-white/[0.04]">
+              <div className="text-center mb-16">
+                <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-3">Everything your mind needs.</h2>
+                <p className="text-neutral-400 text-sm">A complete wellness operating system built for modern mental health.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                  { num: '01', title: 'MIRA AI Companion', desc: 'Context-aware conversational AI with emotional intelligence, typing indicators, and personalized guidance.' },
+                  { num: '02', title: '3 Clinical Assessments', desc: '10, 25, and 40-question deep-reasoning psychological evaluations with AI diagnostic summaries.' },
+                  { num: '03', title: 'Wellness DNA Profile', desc: 'Clinical wellness scores, stress indices, anxiety levels, happiness metrics, and burnout risk analytics.' },
+                  { num: '04', title: 'Mood Timeline', desc: 'Interactive mood selectors that update a live emotional history timeline with pattern recognition.' },
+                  { num: '05', title: 'Smart Journal', desc: 'Distraction-free journaling with AI-generated compassionate reflection summaries.' },
+                  { num: '06', title: 'Mental Health Toolkit', desc: 'Interactive box-breathing visualizer and emergency 5-4-3-2-1 grounding technique.' },
+                ].map((f) => (
+                  <div key={f.num} className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] transition-all group relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-6 font-semibold text-sm">{f.num}</div>
+                    <h3 className="text-lg font-semibold text-white mb-2">{f.title}</h3>
+                    <p className="text-sm text-neutral-400 leading-relaxed">{f.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Assessments Preview */}
+            <section id="assessments" className="px-6 lg:px-12 py-24 max-w-5xl mx-auto border-t border-white/[0.04]">
+              <div className="text-center mb-12">
+                <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-3">3 Comprehensive Clinical Assessments</h2>
+                <p className="text-neutral-400 text-sm">Deep-reasoning psychological evaluations designed by clinical frameworks.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {([1, 2, 3] as AssessmentTier[]).map((tier) => {
+                  const config = TIER_CONFIG[tier];
+                  return (
+                    <div key={tier} className="p-6 rounded-3xl bg-white/[0.02] border border-white/[0.06] space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono text-emerald-400 uppercase tracking-wider">Assessment {tier}</span>
+                        <span className="text-xs text-neutral-500 font-mono">{config.time}</span>
+                      </div>
+                      <div className="text-3xl font-extrabold text-white">{config.questions.length}<span className="text-sm text-neutral-400 font-normal ml-1">questions</span></div>
+                      <h3 className="text-sm font-semibold text-white">{config.label}</h3>
+                      <p className="text-xs text-neutral-400 leading-relaxed">{config.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </motion.div>
+        )}
+
+        {/* LOGIN */}
+        {currentView === 'login' && (
+          <motion.div key="login" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="max-w-md mx-auto px-6 py-20">
+            <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] backdrop-blur-2xl shadow-2xl space-y-6">
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl font-bold text-white tracking-tight">Welcome Back</h2>
+                <p className="text-xs text-neutral-400">Log in securely to access your wellness workspace.</p>
+              </div>
+              <form onSubmit={(e) => handleAuthSubmit(e, 'login')} className="space-y-4">
                 <div>
-                  <label className="block text-xs text-white/40 mb-2 font-medium">Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={form.name}
-                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="Your name"
-                    className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-white/25 outline-none transition-all"
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
-                  />
+                  <label className="block text-xs uppercase tracking-wider text-neutral-400 font-semibold mb-2">Email Address</label>
+                  <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="name@example.com" className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-xs text-white/40 mb-2 font-medium">Email</label>
-                  <input
-                    type="email"
-                    required
-                    value={form.email}
-                    onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                    placeholder="you@example.com"
-                    className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-white/25 outline-none transition-all"
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
-                  />
+                  <label className="block text-xs uppercase tracking-wider text-neutral-400 font-semibold mb-2">Password</label>
+                  <input type="password" required value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
                 </div>
-                <div>
-                  <label className="block text-xs text-white/40 mb-2 font-medium">Message</label>
-                  <textarea
-                    required
-                    rows={5}
-                    value={form.message}
-                    onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
-                    placeholder="What's on your mind?"
-                    className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-white/25 outline-none transition-all resize-none"
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
-                  />
-                </div>
-                <button type="submit"
-                  className="w-full py-3.5 rounded-xl font-semibold text-white text-sm transition-all hover:opacity-90 hover:-translate-y-0.5"
-                  style={{ background: 'linear-gradient(135deg, #7C3AED, #A855F7)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)' }}>
-                  Send message
+                <button type="submit" className="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-all shadow-lg shadow-emerald-500/20">
+                  Sign In to MindCast
                 </button>
               </form>
-            )}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── CTA Banner ──────────────────────────────────────────────────────────────
-function CTABanner() {
-  return (
-    <section className="py-20 px-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="relative rounded-3xl p-12 md:p-16 text-center overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(251,113,133,0.15) 100%)', border: '1px solid rgba(124,58,237,0.25)' }}>
-          <div className="absolute inset-0 opacity-30"
-            style={{ background: 'radial-gradient(ellipse at center, rgba(124,58,237,0.4) 0%, transparent 70%)' }} />
-          <div className="relative">
-            <h2 className="font-heading font-bold text-white mb-4" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', letterSpacing: '-0.03em' }}>
-              Start your wellness journey today.
-            </h2>
-            <p className="text-white/55 mb-10 text-lg max-w-xl mx-auto">
-              Join 12,000+ people who check in with MindCast every day. Free to start, no credit card required.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-4">
-              <Link
-                href="/sign-up-login-screen"
-                className="flex items-center gap-2 px-8 py-4 rounded-full font-semibold text-white transition-all duration-300 hover:-translate-y-1"
-                style={{ background: 'linear-gradient(135deg, #7C3AED, #A855F7)', boxShadow: '0 8px 32px rgba(124,58,237,0.5)' }}>
-                Start Free — No card needed
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Footer ──────────────────────────────────────────────────────────────────
-function Footer() {
-  return (
-    <footer className="border-t px-6 py-12" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-      <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col md:flex-row items-start justify-between gap-10 mb-10">
-          {/* Brand */}
-          <div className="max-w-xs">
-            <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: 'linear-gradient(135deg, #7C3AED, #FB7185)' }}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path d="M7 1.5C4.8 1.5 3 3.3 3 5.5c0 1.4.7 2.6 1.8 3.3V10h4.4V8.8C10.3 8.1 11 6.9 11 5.5c0-2.2-1.8-4-4-4z" fill="white" opacity="0.9"/>
-                </svg>
+              <div className="text-center pt-2">
+                <button onClick={() => setCurrentView('signup')} className="text-xs text-neutral-400 hover:text-white transition-colors">
+                  Don&apos;t have an account? <span className="text-emerald-400 underline">Sign up</span>
+                </button>
               </div>
-              <span className="font-heading font-bold text-white">MindCast</span>
             </div>
-            <p className="text-white/35 text-sm leading-relaxed">
-              Your AI-powered mental wellness companion. Built with care, designed for real life.
-            </p>
-          </div>
+          </motion.div>
+        )}
 
-          {/* Links */}
-          <div className="flex flex-wrap gap-12">
-            {[
-              { heading: 'Product', links: ['Features', 'Pricing', 'Changelog', 'Roadmap'] },
-              { heading: 'Company', links: ['About', 'Blog', 'Careers', 'Press'] },
-              { heading: 'Legal', links: ['Privacy', 'Terms', 'Security', 'Cookies'] },
-            ].map((col) => (
-              <div key={col.heading}>
-                <div className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-4">{col.heading}</div>
-                <div className="flex flex-col gap-2.5">
-                  {col.links.map(link => (
-                    <a key={link} href="#" className="text-sm text-white/35 hover:text-white/70 transition-colors">{link}</a>
-                  ))}
+        {/* SIGNUP */}
+        {currentView === 'signup' && (
+          <motion.div key="signup" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="max-w-md mx-auto px-6 py-20">
+            <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] backdrop-blur-2xl shadow-2xl space-y-6">
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl font-bold text-white tracking-tight">Create Your Account</h2>
+                <p className="text-xs text-neutral-400">Join MindCast and activate your AI companion MIRA.</p>
+              </div>
+              <form onSubmit={(e) => handleAuthSubmit(e, 'signup')} className="space-y-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-neutral-400 font-semibold mb-2">Email Address</label>
+                  <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="name@example.com" className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
                 </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-neutral-400 font-semibold mb-2">Create Password</label>
+                  <input type="password" required value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" className="w-full bg-black/50 border border-white/10 rounded-xl p-3.5 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
+                </div>
+                <button type="submit" className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white font-semibold text-sm transition-all shadow-lg shadow-emerald-600/25">
+                  Create Account &amp; Launch MIRA
+                </button>
+              </form>
+              <div className="text-center pt-2">
+                <button onClick={() => setCurrentView('login')} className="text-xs text-neutral-400 hover:text-white transition-colors">
+                  Already have an account? <span className="text-emerald-400 underline">Log in</span>
+                </button>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          </motion.div>
+        )}
 
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-8 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-          <div className="text-xs text-white/25">© 2026 MindCast. All rights reserved.</div>
-          <div className="flex items-center gap-1 text-xs text-white/25">
-            Made with <span className="text-rose-400 mx-1">♥</span> for mental wellness
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
-}
+        {/* DASHBOARD */}
+        {currentView === 'dashboard' && (
+          <motion.div key="dashboard" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
-export default function LandingPage() {
-  return (
-    <div className="min-h-screen text-white" style={{ background: '#06080F' }}>
-      <AnimatedBackground />
-      <Navbar />
-      <main>
-        <HeroSection />
-        <TickerSection />
-        <ProductOverview />
-        <FeaturesSection />
-        <HowItWorks />
-        <MiraShowcase />
-        <WellnessDNASection />
-        <FeaturePreviews />
-        <AnalyticsPreview />
-        <SecuritySection />
-        <FAQSection />
-        <ContactSection />
-        <CTABanner />
-      </main>
-      <Footer />
+            {/* Tab Navigation */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 border-b border-white/[0.06] scrollbar-none">
+              {([
+                { id: 'mira', label: '🤖 MIRA AI' },
+                { id: 'assessments', label: '🧠 Assessments' },
+                { id: 'dna', label: '🧬 Wellness DNA' },
+                { id: 'mood', label: '😊 Mood Tracker' },
+                { id: 'journal', label: '📓 Journal' },
+                { id: 'habits', label: '🎯 Habits' },
+                { id: 'toolkit', label: '❤️ Toolkit' },
+              ] as { id: Tab; label: string }[]).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                    activeTab === tab.id ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-white/[0.03] text-neutral-400 hover:text-white border border-white/5'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <AnimatePresence mode="wait">
+
+              {/* ── MIRA AI CHAT ─────────────────────────────────────────── */}
+              {activeTab === 'mira' && (
+                <motion.div key="mira" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  <div className="lg:col-span-1 p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-4 h-fit">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-xl">🤖</div>
+                    <div>
+                      <h3 className="font-bold text-white text-sm">MIRA Assistant</h3>
+                      <p className="text-xs text-neutral-400 mt-1">Mind Intelligence &amp; Reflective Assistant — context-aware emotional guidance with conversation memory.</p>
+                    </div>
+                    <div className="pt-2 border-t border-white/10 space-y-2 text-xs text-neutral-400">
+                      <p>🟢 Active Context Engine</p>
+                      <p>🔒 End-to-End Encrypted</p>
+                      <p>🧠 Emotional Pattern Recognition</p>
+                    </div>
+                    <div className="pt-2 border-t border-white/10">
+                      <p className="text-xs text-neutral-500 mb-2 font-semibold uppercase tracking-wider">Quick Prompts</p>
+                      {["I'm feeling anxious", "Help me sleep better", "I need to vent", "I'm feeling great today"].map(prompt => (
+                        <button
+                          key={prompt}
+                          onClick={() => { setUserInput(prompt); }}
+                          className="w-full text-left text-xs text-neutral-400 hover:text-white py-1.5 px-2 rounded-lg hover:bg-white/[0.05] transition-all"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-3 flex flex-col h-[650px] rounded-3xl bg-white/[0.02] border border-white/[0.08] overflow-hidden backdrop-blur-xl">
+                    <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                      {chatMessages.map((msg) => (
+                        <motion.div key={msg.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`flex gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          {msg.sender === 'mira' && (
+                            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs font-bold flex-shrink-0 mt-1">M</div>
+                          )}
+                          <div className={`max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed ${msg.sender === 'user' ? 'bg-emerald-600 text-white rounded-br-none' : 'bg-white/[0.05] border border-white/10 text-neutral-200 rounded-bl-none'}`}>
+                            {msg.text}
+                          </div>
+                        </motion.div>
+                      ))}
+                      {isMiraTyping && (
+                        <div className="flex gap-3 items-center">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs font-bold">M</div>
+                          <div className="p-4 rounded-2xl bg-white/[0.05] border border-white/10 text-neutral-400 text-xs flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                            <span className="ml-1">MIRA is reflecting...</span>
+                          </div>
+                        </div>
+                      )}
+                      <div ref={chatBottomRef} />
+                    </div>
+                    <div className="p-4 border-t border-white/[0.06] bg-black/40">
+                      <form onSubmit={handleSendMessage} className="flex gap-3">
+                        <input
+                          type="text"
+                          value={userInput}
+                          onChange={(e) => setUserInput(e.target.value)}
+                          placeholder="Ask MIRA anything or share how you feel..."
+                          className="flex-1 bg-black/60 border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                        />
+                        <button type="submit" className="px-6 py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs transition-all shadow-lg shadow-emerald-500/20 flex-shrink-0">
+                          Send
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ── ASSESSMENTS ──────────────────────────────────────────── */}
+              {activeTab === 'assessments' && (
+                <motion.div key="assessments" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="space-y-6">
+                  {!selectedTier ? (
+                    <>
+                      <div className="p-8 rounded-3xl bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/20">
+                        <span className="text-xs font-mono tracking-widest text-emerald-400 uppercase">🧠 Clinical Assessments</span>
+                        <h2 className="text-2xl font-bold text-white mt-2">Choose Your Assessment</h2>
+                        <p className="text-sm text-neutral-300 mt-1">Three levels of deep-reasoning psychological evaluation. Each builds on the previous.</p>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {([1, 2, 3] as AssessmentTier[]).map((tier) => {
+                          const config = TIER_CONFIG[tier];
+                          const colors = { 1: 'emerald', 2: 'teal', 3: 'sky' };
+                          const c = colors[tier];
+                          return (
+                            <div key={tier} className={`p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] hover:border-${c}-500/30 transition-all space-y-4 cursor-pointer group`} onClick={() => setSelectedTier(tier)}>
+                              <div className="flex items-center justify-between">
+                                <span className={`text-xs font-mono text-${c}-400 uppercase tracking-wider`}>Assessment {tier}</span>
+                                <span className="text-xs text-neutral-500 font-mono">{config.time}</span>
+                              </div>
+                              <div className={`text-4xl font-extrabold text-${c}-400`}>{config.questions.length}<span className="text-sm text-neutral-400 font-normal ml-1">Qs</span></div>
+                              <h3 className="text-sm font-semibold text-white leading-snug">{config.label}</h3>
+                              <p className="text-xs text-neutral-400 leading-relaxed">{config.desc}</p>
+                              <button className={`w-full py-2.5 rounded-xl bg-${c}-500/10 border border-${c}-500/20 text-${c}-300 text-xs font-semibold hover:bg-${c}-500/20 transition-all`}>
+                                Begin Assessment →
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : assessmentComplete ? (
+                    <AssessmentResult answers={assessmentAnswers} tier={selectedTier} onRetake={resetAssessment} />
+                  ) : (
+                    <div className="max-w-2xl mx-auto space-y-6">
+                      {/* Progress */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs text-neutral-400">
+                          <span>{TIER_CONFIG[selectedTier].label}</span>
+                          <span>{assessmentStep + 1} / {TIER_CONFIG[selectedTier].questions.length}</span>
+                        </div>
+                        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <motion.div
+                            animate={{ width: `${((assessmentStep + 1) / TIER_CONFIG[selectedTier].questions.length) * 100}%` }}
+                            transition={{ duration: 0.4 }}
+                            className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Question */}
+                      <AnimatePresence mode="wait">
+                        <motion.div
+                          key={assessmentStep}
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          transition={{ duration: 0.25 }}
+                          className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-6"
+                        >
+                          <div>
+                            <span className="text-xs font-mono text-emerald-400 uppercase tracking-wider">{TIER_CONFIG[selectedTier].questions[assessmentStep].category}</span>
+                            <h3 className="text-lg font-semibold text-white mt-2 leading-snug">
+                              {TIER_CONFIG[selectedTier].questions[assessmentStep].text}
+                            </h3>
+                          </div>
+                          <div className="space-y-3">
+                            {TIER_CONFIG[selectedTier].questions[assessmentStep].options.map((opt) => (
+                              <button
+                                key={opt.label}
+                                onClick={() => handleAssessmentAnswer(TIER_CONFIG[selectedTier].questions[assessmentStep].id, opt.score)}
+                                className="w-full p-4 rounded-2xl bg-black/30 border border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/5 text-left transition-all group"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <span className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-xs font-bold text-neutral-400 group-hover:bg-emerald-500/20 group-hover:text-emerald-300 transition-all flex-shrink-0">
+                                    {opt.label}
+                                  </span>
+                                  <span className="text-sm text-neutral-200 leading-relaxed">{opt.text}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      </AnimatePresence>
+
+                      <button onClick={resetAssessment} className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors">
+                        ← Back to Assessment Selection
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* ── WELLNESS DNA ─────────────────────────────────────────── */}
+              {activeTab === 'dna' && (
+                <motion.div key="dna" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="space-y-6">
+                  <div className="p-8 rounded-3xl bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/20">
+                    <span className="text-xs font-mono tracking-widest text-emerald-400 uppercase">🧬 Clinical Profile</span>
+                    <h2 className="text-2xl font-bold text-white mt-2">Your Wellness DNA Profile</h2>
+                    <p className="text-sm text-neutral-300 mt-1">Deep clinical analysis derived from your assessments, daily check-ins, and behavioral patterns.</p>
+                  </div>
+
+                  {/* Primary Score */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-1 p-8 rounded-3xl bg-gradient-to-br from-emerald-500/15 to-teal-500/5 border border-emerald-500/30 flex flex-col items-center justify-center text-center space-y-3">
+                      <span className="text-xs font-mono text-emerald-400 uppercase tracking-wider">Overall Wellness Score</span>
+                      <div className="text-7xl font-extrabold text-emerald-400">84</div>
+                      <div className="text-sm text-neutral-400">/ 100</div>
+                      <div className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold">↑ 4% from last week</div>
+                    </div>
+                    <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+                      {[
+                        { label: 'Stress Index', value: 'Low-Moderate', sub: 'Well managed through habits', color: 'emerald' },
+                        { label: 'Anxiety Level', value: 'Managed', sub: 'Stable with mindful practices', color: 'teal' },
+                        { label: 'Happiness Index', value: 'High', sub: 'Positive trend over 7 days', color: 'sky' },
+                        { label: 'Motivation', value: 'Strong', sub: 'Driven by consistent habits', color: 'violet' },
+                        { label: 'Burnout Risk', value: 'Minimal', sub: 'Optimal recovery balance', color: 'emerald' },
+                        { label: 'Resilience Score', value: '78/100', sub: 'Above average psychological resilience', color: 'amber' },
+                      ].map((metric) => (
+                        <div key={metric.label} className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-1.5">
+                          <span className="text-xs text-neutral-400 uppercase tracking-wider font-semibold">{metric.label}</span>
+                          <div className={`text-xl font-bold text-${metric.color}-400`}>{metric.value}</div>
+                          <p className="text-xs text-neutral-500">{metric.sub}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Clinical Indicators */}
+                  <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-4">
+                    <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Clinical Wellness Indicators</h3>
+                    <div className="space-y-4">
+                      {[
+                        { label: 'Emotional Regulation', score: 82, color: '#10b981' },
+                        { label: 'Cognitive Load Management', score: 68, color: '#0ea5e9' },
+                        { label: 'Sleep Quality Index', score: 75, color: '#8b5cf6' },
+                        { label: 'Social Connectedness', score: 71, color: '#f59e0b' },
+                        { label: 'Stress Resilience', score: 79, color: '#ec4899' },
+                        { label: 'Burnout Prevention', score: 88, color: '#10b981' },
+                      ].map((indicator) => (
+                        <div key={indicator.label} className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-neutral-300">{indicator.label}</span>
+                            <span className="font-semibold text-white">{indicator.score}/100</span>
+                          </div>
+                          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${indicator.score}%` }}
+                              transition={{ duration: 1, ease: 'easeOut', delay: 0.1 }}
+                              className="h-full rounded-full"
+                              style={{ background: indicator.color }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* MIRA Insight */}
+                  <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-emerald-500/20 flex items-center justify-center text-xs">🤖</div>
+                      <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">MIRA Wellness Insight</span>
+                    </div>
+                    <p className="text-sm text-neutral-200 leading-relaxed">
+                      Your Wellness DNA profile indicates a strong psychological foundation with well-managed stress responses. Your sleep quality and emotional regulation scores are above average. The primary area for growth is cognitive load management — consider implementing structured work breaks and mindfulness practices to optimize your mental performance.
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ── MOOD TRACKER ─────────────────────────────────────────── */}
+              {activeTab === 'mood' && (
+                <motion.div key="mood" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="space-y-6">
+                  <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-6">
+                    <div>
+                      <h2 className="text-xl font-bold text-white">How are you feeling right now?</h2>
+                      <p className="text-xs text-neutral-400 mt-1">Select your current emotional state to update your live timeline.</p>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                      {[
+                        { label: 'Happy', emoji: '😊' },
+                        { label: 'Calm', emoji: '🌿' },
+                        { label: 'Stressed', emoji: '🌊' },
+                        { label: 'Excited', emoji: '✨' },
+                        { label: 'Tired', emoji: '🌙' },
+                        { label: 'Anxious', emoji: '☁️' },
+                      ].map((m) => (
+                        <button
+                          key={m.label}
+                          onClick={() => handleMoodSelect(m.label, m.emoji)}
+                          className={`p-4 rounded-2xl border transition-all flex flex-col items-center gap-2 ${selectedMood === m.label ? 'border-emerald-500 bg-emerald-500/15 scale-105' : 'border-white/10 bg-black/30 hover:border-white/20'}`}
+                        >
+                          <span className="text-2xl">{m.emoji}</span>
+                          <span className="text-xs font-semibold text-white">{m.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {selectedMood && (
+                      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                        <p className="text-sm text-emerald-300">✓ Mood logged: <strong>{selectedMood}</strong> — Your timeline has been updated.</p>
+                      </motion.div>
+                    )}
+                  </div>
+
+                  <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-4">
+                    <h3 className="text-lg font-bold text-white">Live Emotional Timeline</h3>
+                    <div className="space-y-2">
+                      {moodHistory.map((item, idx) => (
+                        <motion.div
+                          key={item.id}
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.05 }}
+                          className="flex items-center justify-between p-4 rounded-2xl bg-black/30 border border-white/5"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-xl">{item.emoji}</span>
+                            <div>
+                              <span className="text-sm font-medium text-white">{item.mood}</span>
+                              <p className="text-xs text-neutral-500">{item.day}</p>
+                            </div>
+                          </div>
+                          <span className="text-xs font-mono text-neutral-500">{item.time}</span>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ── SMART JOURNAL ────────────────────────────────────────── */}
+              {activeTab === 'journal' && (
+                <motion.div key="journal" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="space-y-6">
+                  <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-4">
+                    <div>
+                      <h2 className="text-xl font-bold text-white">Daily AI Journal</h2>
+                      <p className="text-xs text-neutral-400 mt-1">Write freely. Each entry receives an AI compassionate reflection summary from MIRA.</p>
+                    </div>
+                    <textarea
+                      rows={6}
+                      value={journalText}
+                      onChange={(e) => setJournalText(e.target.value)}
+                      placeholder="What went well today? What challenges did you face? What are you grateful for?"
+                      className="w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors resize-none leading-relaxed"
+                    />
+                    <button
+                      onClick={handleJournalSave}
+                      disabled={!journalText.trim() || isAnalyzing}
+                      className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-semibold text-xs transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                          MIRA is analyzing...
+                        </>
+                      ) : (
+                        'Save & Analyze with MIRA'
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-bold text-white">Past Entries</h3>
+                    {journalEntries.map((entry, idx) => (
+                      <motion.div key={entry.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} className="p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-3">
+                        <div className="flex items-center justify-between text-xs text-neutral-400 font-mono">
+                          <span>{entry.date}</span>
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">{entry.tag}</span>
+                        </div>
+                        <p className="text-sm text-neutral-200 leading-relaxed">{entry.snippet.length > 120 ? entry.snippet.slice(0, 120) + '...' : entry.snippet}</p>
+                        {entry.aiSummary && (
+                          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
+                            <span className="text-xs font-semibold text-emerald-400">🤖 MIRA Reflection</span>
+                            <p className="text-xs text-neutral-300 leading-relaxed">{entry.aiSummary}</p>
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ── HABIT TRACKER ────────────────────────────────────────── */}
+              {activeTab === 'habits' && (
+                <motion.div key="habits" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="space-y-6">
+                  <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-xl font-bold text-white">Daily Wellness Habits</h2>
+                        <p className="text-xs text-neutral-400 mt-1">Small consistent actions build lasting psychological resilience.</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-extrabold text-emerald-400">{completedHabits}/{habits.length}</div>
+                        <div className="text-xs text-neutral-400">completed today</div>
+                      </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                      <motion.div
+                        animate={{ width: `${(completedHabits / habits.length) * 100}%` }}
+                        transition={{ duration: 0.5 }}
+                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"
+                      />
+                    </div>
+
+                    <div className="space-y-3">
+                      {habits.map((habit) => (
+                        <motion.div
+                          key={habit.id}
+                          layout
+                          className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${habit.done ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-black/30 border-white/5'}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => toggleHabit(habit.id)}
+                              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${habit.done ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 hover:border-emerald-500/50'}`}
+                            >
+                              {habit.done && <span className="text-black text-xs font-bold">✓</span>}
+                            </button>
+                            <span className="text-lg">{habit.icon}</span>
+                            <span className={`text-sm font-medium ${habit.done ? 'line-through text-neutral-500' : 'text-white'}`}>{habit.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                              🔥 {habit.streak} day streak
+                            </span>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ── TOOLKIT ──────────────────────────────────────────────── */}
+              {activeTab === 'toolkit' && (
+                <motion.div key="toolkit" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="space-y-6">
+                  {/* Tool Selector */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setActiveToolkit('breathing')}
+                      className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeToolkit === 'breathing' ? 'bg-emerald-500 text-black' : 'bg-white/[0.03] text-neutral-400 border border-white/10 hover:text-white'}`}
+                    >
+                      🌬️ Box Breathing
+                    </button>
+                    <button
+                      onClick={() => setActiveToolkit('grounding')}
+                      className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeToolkit === 'grounding' ? 'bg-rose-500 text-white' : 'bg-white/[0.03] text-neutral-400 border border-white/10 hover:text-white'}`}
+                    >
+                      🆘 Emergency Grounding
+                    </button>
+                  </div>
+
+                  <AnimatePresence mode="wait">
+                    {activeToolkit === 'breathing' && (
+                      <motion.div key="breathing" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-6">
+                          <div>
+                            <span className="text-xs font-mono text-emerald-400 uppercase tracking-wider">Breathing Exercise</span>
+                            <h3 className="text-xl font-bold text-white mt-1">Box Breathing (4-4-4-4)</h3>
+                            <p className="text-sm text-neutral-400 mt-2">Used by Navy SEALs and clinical therapists to instantly regulate the nervous system and reduce acute stress.</p>
+                          </div>
+                          <BoxBreathingVisualizer />
+                        </div>
+                        <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-4">
+                          <h3 className="text-lg font-bold text-white">How Box Breathing Works</h3>
+                          <div className="space-y-3">
+                            {[
+                              { step: '1', title: 'Activates Parasympathetic System', desc: 'Controlled breathing signals safety to your nervous system, reducing cortisol and adrenaline.' },
+                              { step: '2', title: 'Regulates Heart Rate Variability', desc: 'The 4-count rhythm synchronizes your heart rate with your breath, creating physiological calm.' },
+                              { step: '3', title: 'Quiets the Amygdala', desc: 'Focused breathing reduces activity in the brain\'s fear center, interrupting anxiety loops.' },
+                              { step: '4', title: 'Restores Prefrontal Function', desc: 'As stress decreases, your rational thinking brain comes back online for clearer decision-making.' },
+                            ].map((item) => (
+                              <div key={item.step} className="flex gap-3 p-3 rounded-xl bg-black/30 border border-white/5">
+                                <div className="w-6 h-6 rounded-lg bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-400 flex-shrink-0">{item.step}</div>
+                                <div>
+                                  <p className="text-xs font-semibold text-white">{item.title}</p>
+                                  <p className="text-xs text-neutral-400 mt-0.5 leading-relaxed">{item.desc}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {activeToolkit === 'grounding' && (
+                      <motion.div key="grounding" variants={fadeVariants} initial="initial" animate="animate" exit="exit" transition={transition} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-6">
+                          <div>
+                            <span className="text-xs font-mono text-rose-400 uppercase tracking-wider">Emergency Calming</span>
+                            <h3 className="text-xl font-bold text-white mt-1">Grounding Sanctuary</h3>
+                            <p className="text-sm text-neutral-400 mt-2">The 5-4-3-2-1 technique is a clinically validated intervention for panic attacks, acute anxiety, and dissociation.</p>
+                          </div>
+                          <EmergencyGrounding />
+                        </div>
+                        <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] space-y-4">
+                          <h3 className="text-lg font-bold text-white">The Science of Grounding</h3>
+                          <div className="space-y-3">
+                            {[
+                              { title: 'Interrupts Anxiety Loops', desc: 'Engaging your senses forces your brain to process present-moment information, breaking the rumination cycle.' },
+                              { title: 'Activates Sensory Cortex', desc: 'Multi-sensory engagement shifts neural activity away from the limbic system (fear) to the sensory cortex (present reality).' },
+                              { title: 'Reduces Dissociation', desc: 'Physical sensory anchoring is the primary clinical intervention for dissociative episodes and trauma responses.' },
+                              { title: 'Builds Interoceptive Awareness', desc: 'Regular practice strengthens your ability to notice and regulate your own physiological state.' },
+                            ].map((item, i) => (
+                              <div key={i} className="flex gap-3 p-3 rounded-xl bg-black/30 border border-white/5">
+                                <div className="w-6 h-6 rounded-lg bg-rose-500/20 flex items-center justify-center text-xs font-bold text-rose-400 flex-shrink-0">{i + 1}</div>
+                                <div>
+                                  <p className="text-xs font-semibold text-white">{item.title}</p>
+                                  <p className="text-xs text-neutral-400 mt-0.5 leading-relaxed">{item.desc}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="p-4 rounded-2xl bg-rose-500/5 border border-rose-500/20">
+                            <p className="text-xs text-rose-300 leading-relaxed">
+                              <strong>Important:</strong> If you are experiencing a mental health crisis, please contact a professional. In the US: SAMHSA Helpline 1-800-662-4357 | Crisis Text Line: Text HOME to 741741
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+
+            </AnimatePresence>
+          </motion.div>
+        )}
+
+      </AnimatePresence>
+
+      {/* ── FOOTER ─────────────────────────────────────────────────────────── */}
+      <footer className="border-t border-white/[0.06] py-8 px-6 lg:px-12 mt-24 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+        <div className="text-xs text-neutral-500">
+          © 2026 MindCast. AI Mental Wellness Operating System.
+        </div>
+        <div className="text-xs text-neutral-500 font-mono tracking-wider">
+          Made by Aditya Naik and Vihaan Vaghela
+        </div>
+      </footer>
     </div>
   );
 }
