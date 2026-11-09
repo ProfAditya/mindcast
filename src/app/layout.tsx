@@ -1,15 +1,9 @@
 import React from 'react';
 import type { Metadata, Viewport } from 'next';
-import { Manrope } from 'next/font/google';
+import '@fontsource-variable/manrope';
 import Providers from './providers';
 import '../styles/tailwind.css';
 
-const manrope = Manrope({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-manrope',
-  display: 'swap',
-});
 
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#111111' };
 
@@ -25,7 +19,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${manrope.variable} dark`}>
+    <html lang="en" className="dark">
       <body className="min-h-screen bg-obsidian font-sans text-ivory">
         <a
           href="#main"
