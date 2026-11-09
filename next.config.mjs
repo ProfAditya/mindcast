@@ -10,6 +10,13 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Same-origin proxy to the neurix-api Edge Function. The Authorization header is passed through
+  // unchanged; the function still verifies every request. Avoids browser CORS restrictions.
+  async rewrites() {
+    const target = (process.env.NEURIX_FUNCTION_URL ||
+      'https://hhdlsbbeabdbqrlqxtiu.supabase.co/functions/v1/neurix-api').replace(/\/+$/, '');
+    return [{ source: '/api/neurix/:path*', destination: `${target}/:path*` }];
+  },
   images: {
     remotePatterns: imageHosts,
     minimumCacheTTL: 60,

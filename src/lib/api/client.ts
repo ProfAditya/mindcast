@@ -9,9 +9,11 @@ export const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hhdlsbbeabdbqrlqxtiu.supabase.co';
 // Publishable (public) key — safe in the browser by design; access is enforced by RLS and the API.
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_1q9-CJyF3H9NNTebkLmP9Q_Nz_BSspG';
+// Default: same-origin path that next.config.mjs forwards to neurix-api, so the browser never needs CORS.
+// Set NEXT_PUBLIC_BACKEND_URL to the full function URL to call it directly instead.
 const FUNCTION_URL = (
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  'https://hhdlsbbeabdbqrlqxtiu.supabase.co/functions/v1/neurix-api'
+  '/api/neurix'
 ).replace(/\/+$/, '');
 export const API_BASE = `${FUNCTION_URL}/api/v1`;
 
