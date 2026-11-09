@@ -7,7 +7,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hhdlsbbeabdbqrlqxtiu.supabase.co';
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// Publishable (public) key — safe in the browser by design; access is enforced by RLS and the API.
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_1q9-CJyF3H9NNTebkLmP9Q_Nz_BSspG';
 const FUNCTION_URL = (
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   'https://hhdlsbbeabdbqrlqxtiu.supabase.co/functions/v1/neurix-api'

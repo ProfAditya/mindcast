@@ -50,9 +50,9 @@ export default function Landing() {
             </div>
             <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-stone">
               {[
-                'Your data stays yours',
-                'Sharing is opt-in, per category',
-                'No ads, no data selling',
+                'Nothing is shared unless you choose to',
+                'Journals are never shared with doctors',
+                'Not a diagnosis or medical service',
               ].map((t) => (
                 <li key={t} className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-sage" aria-hidden />
@@ -116,17 +116,38 @@ export default function Landing() {
               ))}
             </ul>
           </div>
-          <div className="surface space-y-3 p-5" aria-label="Illustrative example conversation">
-            <p className="label-eyebrow">Illustration · not real data</p>
-            <Bubble me>I’ve felt flat most afternoons this week.</Bubble>
-            <Bubble>
-              Thanks for sharing that. In the last 14 days you logged 9 mood entries; the lower ones
-              were mostly on days with under 6 hours of sleep. That’s a pattern, not a cause — would
-              it help to look at your evenings together?
-            </Bubble>
-            <p className="text-[11px] text-stone">
-              AI-generated · used: mood entries, sleep logs · general wellbeing information only
-            </p>
+          <div className="surface space-y-4 p-6">
+            <p className="label-eyebrow">How SOUL replies</p>
+            <ol className="space-y-3 text-sm text-stone">
+              {[
+                [
+                  'You ask a question',
+                  'For example, about how your sleep and mood have changed recently.',
+                ],
+                [
+                  'The NEURIX server gathers only what you allowed',
+                  'Journal and medical data are included only if you have switched them on.',
+                ],
+                [
+                  'The reply is labelled',
+                  'You can see that it is AI-generated and which kinds of data it used.',
+                ],
+                [
+                  'Crisis language gets a fixed safety response',
+                  'Pointing to emergency and crisis services, instead of an AI reply.',
+                ],
+              ].map(([t, d], i) => (
+                <li key={t} className="flex gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gold-line text-xs text-gold">
+                    {i + 1}
+                  </span>
+                  <span>
+                    <span className="block text-ivory">{t}</span>
+                    {d}
+                  </span>
+                </li>
+              ))}
+            </ol>
           </div>
         </div>
       </Section>
@@ -141,7 +162,7 @@ export default function Landing() {
           <Feature
             icon={FileHeart}
             t="Medical records"
-            b="Lab results, prescriptions, imaging, notes — with secure document upload. Files are never public."
+            b="Lab results, prescriptions, imaging, notes — with private document upload. Files are never publicly accessible."
           />
           <Feature
             icon={ClipboardList}
@@ -179,11 +200,12 @@ export default function Landing() {
           </div>
           <div className="surface p-6">
             <p className="label-eyebrow text-softblue">Exploratory reflection modules</p>
-            <h3 className="mt-2 text-lg font-semibold">Seven modules · 30, 40 or 50 questions</h3>
+            <h3 className="mt-2 text-lg font-semibold">Seven modules · 30 to 50 questions</h3>
             <p className="mt-2 text-sm text-stone">
-              Sleep, stress, focus, emotional patterns, relationships, habits and wellbeing.
-              Deterministic, versioned scoring with charts and history. Clearly labelled as
-              exploratory — never clinical.
+              Emotional wellbeing, personality tendencies, thinking and decisions, sleep and
+              lifestyle, stress and coping, relationships and family, and a comprehensive overview.
+              Original NEURIX questions with fixed, versioned scoring — labelled as exploratory, not
+              clinically validated.
             </p>
           </div>
         </div>
@@ -315,7 +337,9 @@ export default function Landing() {
 
       <section className="mx-auto max-w-6xl px-4 py-20 text-center sm:px-6">
         <h2 className="text-3xl font-semibold">Start noticing what matters to you.</h2>
-        <p className="mx-auto mt-3 max-w-lg text-stone">Free to start. Takes under a minute.</p>
+        <p className="mx-auto mt-3 max-w-lg text-stone">
+          Create an account with your email address.
+        </p>
         <div className="mt-7 flex justify-center gap-3">
           <ButtonLink href="/signup" size="lg">
             Create account
@@ -373,67 +397,27 @@ function Feature({
   );
 }
 
-function Bubble({ children, me }: { children: React.ReactNode; me?: boolean }) {
-  return (
-    <div
-      className={
-        me
-          ? 'ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-gold/90 px-4 py-2.5 text-sm text-obsidian'
-          : 'max-w-[90%] rounded-2xl rounded-bl-md border border-bronze bg-graphite-deep px-4 py-2.5 text-sm text-ivory'
-      }
-    >
-      {children}
-    </div>
-  );
-}
-
+/** A schematic of the app's sections. It shows no numbers, scores or results. */
 function HeroPreview() {
-  const bars = [52, 61, 48, 70, 66, 74, 69, 78, 72, 81, 76, 84];
+  const tiles: [string, string][] = [
+    ['Wellbeing', 'Mood, sleep, activity, water, manual screen time'],
+    ['My Health', 'Records, history, private documents'],
+    ['Assessment Centre', 'Validated screeners and reflection modules'],
+    ['Insights', 'Trends with date ranges and record counts'],
+    ['SOUL', 'Reflective AI companion, with your consent'],
+    ['Doctor sharing', 'Per-category, revocable, logged'],
+  ];
   return (
-    <div
-      className="surface relative p-5 sm:p-6"
-      aria-label="Illustration of the NEURIX dashboard with sample values"
-    >
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <p className="label-eyebrow">Illustration</p>
-          <p className="mt-1 font-semibold">Mood &amp; sleep · 12 weeks</p>
-        </div>
-        <span className="rounded-full border border-softblue/40 bg-softblue/10 px-2 py-0.5 text-[11px] text-softblue">
-          Sample values
-        </span>
-      </div>
-      <div className="flex h-40 items-end gap-1.5" aria-hidden>
-        {bars.map((h, i) => (
-          <div key={i} className="flex flex-1 flex-col justify-end gap-1">
-            <div className="rounded-t bg-gold/80" style={{ height: `${h}%` }} />
-            <div className="rounded bg-softblue/50" style={{ height: `${Math.max(8, h / 3)}%` }} />
-          </div>
+    <div className="surface relative p-5 sm:p-6" aria-label="Overview of the main areas of NEURIX">
+      <p className="label-eyebrow">Inside NEURIX</p>
+      <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+        {tiles.map(([t, d]) => (
+          <li key={t} className="rounded-xl border border-bronze bg-graphite-deep p-4">
+            <p className="font-medium text-ivory">{t}</p>
+            <p className="mt-1 text-xs text-stone">{d}</p>
+          </li>
         ))}
-      </div>
-      <div className="mt-3 flex gap-4 text-[11px] text-stone">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-sm bg-gold/80" />
-          Mood (avg)
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-sm bg-softblue/50" />
-          Sleep (hrs, scaled)
-        </span>
-      </div>
-      <div className="mt-5 grid grid-cols-3 gap-2">
-        {[
-          ['Mood', '7.2', 'avg /10'],
-          ['Sleep', '7h 05m', 'avg'],
-          ['Logged', '64', 'days'],
-        ].map(([l, v, h]) => (
-          <div key={l} className="rounded-xl border border-bronze bg-graphite-deep p-3">
-            <p className="text-[10px] uppercase tracking-wider text-stone">{l}</p>
-            <p className="mt-1 text-lg font-semibold text-ivory">{v}</p>
-            <p className="text-[10px] text-stone">{h}</p>
-          </div>
-        ))}
-      </div>
+      </ul>
     </div>
   );
 }

@@ -9,7 +9,7 @@ export function PrivacyPolicy() {
       <section><h2>Sharing with clinicians</h2><p>Nothing is shared by default. A doctor code only identifies a verified clinician; it never grants access by itself. You choose categories one by one, can set an expiry, and can revoke at any time. Journals, SOUL conversations and reminders can never be shared.</p></section>
       <section><h2>AI processing</h2><p>When you use SOUL, the parts of your data covered by your consent are sent from the NEURIX server to the configured AI provider to generate a reply. Journal and medical data have separate switches and are off unless you turn them on. The browser never contacts the AI provider directly.</p></section>
       <section><h2>Your choices</h2><ul><li>Review and change AI consent and sharing in the Privacy centre.</li><li>Delete individual entries, records, documents and conversations.</li><li>See who accessed your shared data in your audit trail.</li></ul></section>
-      <section><h2>What we don’t do</h2><ul><li>We don’t sell your data or show ads.</li><li>We don’t read your phone’s usage automatically.</li></ul></section>
+      <section><h2>What we don’t do</h2><ul><li>The app contains no advertising and no third-party tracking scripts.</li><li>We don’t read your phone’s usage automatically.</li></ul></section>
     </Prose>
   );
 }
