@@ -1,101 +1,36 @@
 /** @type {import('tailwindcss').Config} */
+// NEURIX design tokens: Obsidian + Champagne. Every colour used in the UI comes from here.
 module.exports = {
   darkMode: 'class',
-  content: [
-    './src/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
+  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
   theme: {
-    container: {
-      center: true,
-      padding: '1rem',
-    },
+    container: { center: true, padding: '1rem' },
     extend: {
       colors: {
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
-        primary: {
-          DEFAULT: 'var(--primary)',
-          foreground: 'var(--primary-foreground)',
-        },
-        secondary: {
-          DEFAULT: 'var(--secondary)',
-          foreground: 'var(--secondary-foreground)',
-        },
-        accent: {
-          DEFAULT: 'var(--accent)',
-          foreground: 'var(--accent-foreground)',
-        },
-        muted: {
-          DEFAULT: 'var(--muted)',
-          foreground: 'var(--muted-foreground)',
-        },
-        card: {
-          DEFAULT: 'var(--card)',
-          foreground: 'var(--card-foreground)',
-        },
-        border: 'var(--border)',
-        input: 'var(--input)',
-        ring: 'var(--ring)',
-        wellness: {
-          violet: 'var(--wellness-violet)',
-          rose: 'var(--wellness-rose)',
-          emerald: 'var(--wellness-emerald)',
-          sky: 'var(--wellness-sky)',
-          amber: 'var(--wellness-amber)',
-          fuchsia: 'var(--wellness-fuchsia)',
-        },
-      },
-      borderRadius: {
-        DEFAULT: 'var(--radius)',
-        sm: 'calc(var(--radius) - 4px)',
-        md: 'var(--radius)',
-        lg: 'calc(var(--radius) + 4px)',
-        xl: 'calc(var(--radius) + 8px)',
-        '2xl': '24px',
-        '3xl': '32px',
+        obsidian: '#111111',
+        graphite: { DEFAULT: '#202020', deep: '#181818', raised: '#262626' },
+        gold: { DEFAULT: '#D6B46A', pale: '#E8D9B5', line: '#514A3C' },
+        ivory: '#F7F3EA',
+        stone: '#AAA49A',
+        sage: '#8BB8A5',
+        softblue: '#9AA9D6',
+        rose: '#D58F8F',
+        bronze: '#38342C',
+        divider: '#353535',
       },
       fontFamily: {
-        sans: ['var(--font-figtree)', 'sans-serif'],
-        heading: ['var(--font-manrope)', 'sans-serif'],
-        serif: ['var(--font-playfair)', 'serif'],
+        sans: ['var(--font-manrope)', 'Inter', 'system-ui', 'sans-serif'],
       },
-      animation: {
-        'fade-in': 'fadeIn 0.3s ease-out',
-        'slide-up': 'slideUp 0.4s ease-out',
-        'scale-in': 'scaleIn 0.2s ease-out',
-        'shimmer': 'shimmer 1.5s infinite',
-        'breathe': 'breathe 4s ease-in-out infinite',
+      borderRadius: { xl: '0.875rem', '2xl': '1.125rem' },
+      boxShadow: {
+        card: '0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 24px -16px rgba(0,0,0,0.6)',
+        glow: '0 0 0 1px rgba(214,180,106,0.25), 0 8px 30px -12px rgba(214,180,106,0.25)',
       },
       keyframes: {
-        fadeIn: {
-          from: { opacity: '0' },
-          to: { opacity: '1' },
-        },
-        slideUp: {
-          from: { opacity: '0', transform: 'translateY(12px)' },
-          to: { opacity: '1', transform: 'translateY(0)' },
-        },
-        scaleIn: {
-          from: { opacity: '0', transform: 'scale(0.95)' },
-          to: { opacity: '1', transform: 'scale(1)' },
-        },
-        shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
-        },
-        breathe: {
-          '0%, 100%': { transform: 'scale(1)', opacity: '0.8' },
-          '50%': { transform: 'scale(1.08)', opacity: '1' },
-        },
+        'fade-up': { from: { opacity: '0', transform: 'translateY(6px)' }, to: { opacity: '1', transform: 'none' } },
       },
-      boxShadow: {
-        'card': '0 8px 30px rgba(0, 0, 0, 0.04)',
-        'card-md': '0 12px 40px rgba(0, 0, 0, 0.08)',
-        'violet-glow': '0 8px 20px rgba(124, 58, 237, 0.3)',
-        'rose-glow': '0 8px 20px rgba(251, 113, 133, 0.3)',
-      },
+      animation: { 'fade-up': 'fade-up 0.35s ease-out both' },
     },
   },
-  plugins: [require('@tailwindcss/typography'), require('tailwindcss-animate')],
+  plugins: [require('@tailwindcss/forms')({ strategy: 'class' }), require('tailwindcss-animate')],
 };

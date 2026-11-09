@@ -6,51 +6,54 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
+/** "12 Mar 2026" from an ISO date or datetime. */
+export function fmtDate(
+  v?: string | null,
+  opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
+) {
+  if (!v) return '—';
+  const d = new Date(v.length === 10 ? `${v}T00:00:00` : v);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString(undefined, opts);
 }
 
-export function getWellnessStage(score: number): {
-  stage: string;
-  color: string;
-  label: string;
-} {
-  if (score >= 8.0) return { stage: 'Flourishing', color: 'emerald', label: 'flourishing' };
-  if (score >= 6.5) return { stage: 'Growing', color: 'green', label: 'growing steadily' };
-  if (score >= 5.0) return { stage: 'Stabilizing', color: 'amber', label: 'stabilizing' };
-  if (score >= 3.5) return { stage: 'Recovering', color: 'sky', label: 'recovery phase' };
-  return { stage: 'Challenging', color: 'slate', label: 'navigating a challenging time' };
+export function fmtDateTime(v?: string | null) {
+  if (!v) return '—';
+  const d = new Date(v);
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleString(undefined, {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
 }
 
-export function getMoodEmoji(mood: string): string {
-  const map: Record<string, string> = {
-    great: '✦',
-    good: '◆',
-    okay: '●',
-    low: '◇',
-    struggling: '○',
-  };
-  return map[mood] ?? '●';
+/** Local calendar date as YYYY-MM-DD. */
+export function localISODate(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' | 'night' {
-  const hour = new Date().getHours();
-  if (hour >= 6 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 21) return 'evening';
-  return 'night';
+export function daysAgo(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return localISODate(d);
 }
 
-export function getGreeting(name: string, timeOfDay: string): string {
-  const greetings: Record<string, string> = {
-    morning: `Good morning, ${name}`,
-    afternoon: `Good afternoon, ${name}`,
-    evening: `Good evening, ${name}`,
-    night: `Good night, ${name}`,
-  };
-  return greetings[timeOfDay] ?? `Hello, ${name}`;
+export function greeting(name?: string | null) {
+  const h = new Date().getHours();
+  const part = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  return name ? `${part}, ${name.split(' ')[0]}` : part;
 }
+
+export function titleCase(s: string) {
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+export const round1 = (x: number | null | undefined) =>
+  x == null ? null : Math.round(x * 10) / 10;
+
+/** Only allow same-origin relative redirect targets. */
+export const safeNext = (n: string | null, fallback: string) =>
+  n && n.startsWith('/') && !n.startsWith('//') ? n : fallback;
