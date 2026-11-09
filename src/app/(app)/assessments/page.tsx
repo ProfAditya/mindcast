@@ -121,8 +121,9 @@ export default function AssessmentCentre() {
           <Badge tone="blue">Not clinically validated</Badge>
         </div>
         <p className="mb-4 max-w-3xl text-sm text-stone">
-          Seven NEURIX modules for self-reflection. Choose 30, 40 or 50 questions. Scoring is fixed
-          and versioned — the same answers always give the same result.
+          Seven NEURIX modules for self-reflection, from 30 to 50 questions. Scoring is fixed and
+          versioned — the same answers always give the same result. Personality and thinking styles
+          are shown as tendencies between two poles, never as types or labels.
         </p>
         <Notice tone="blue" title="Saved on this device for now">
           Exploratory results are stored in this browser only, because the NEURIX server doesn’t
@@ -157,8 +158,13 @@ export default function AssessmentCentre() {
                   {mine.length
                     ? `${mine.length} attempt${mine.length > 1 ? 's' : ''} · last ${fmtDate(mine[0].completed_at)} · overall ${mine[0].result.overall ?? '—'}/100`
                     : 'No attempts yet'}{' '}
-                  · v{m.version}
+                  · {m.lengths.join(' / ')} questions · v{m.version}
                 </p>
+                {m.sensitive && (
+                  <p className="mt-2 text-[11px] text-rose">
+                    Includes optional sensitive questions
+                  </p>
+                )}
                 <div className="mt-4 flex gap-2">
                   <ButtonLink
                     href={`/assessments/${m.id}`}

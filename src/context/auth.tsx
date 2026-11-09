@@ -24,7 +24,13 @@ const Ctx = createContext<AuthState | null>(null);
 
 const NETWORK_MSG = 'Cannot reach NEURIX. Check your internet connection and try again.';
 const authMessage = (m?: string) =>
-  !m ? 'Something went wrong.' : /failed to fetch|network|load failed/i.test(m) ? NETWORK_MSG : m === 'Invalid login credentials' ? 'Email or password is incorrect.' : m;
+  !m
+    ? 'Something went wrong.'
+    : /failed to fetch|network|load failed/i.test(m)
+      ? NETWORK_MSG
+      : m === 'Invalid login credentials'
+        ? 'Email or password is incorrect.'
+        : m;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -81,11 +87,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = useCallback(
     async (name: string, email: string, password: string) => {
-      const { data, error } = await supabase().auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: name } },
-      }).catch((e: Error) => ({ data: { session: null }, error: e }));
+      const { data, error } = await supabase()
+        .auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: name } },
+        })
+        .catch((e: Error) => ({ data: { session: null }, error: e }));
       if (error) throw new Error(authMessage(error.message));
       if (!data.session) return { needsConfirmation: true };
       setSession(data.session);

@@ -232,17 +232,22 @@ export function BarsChart<T extends Record<string, unknown>>({
           barGap={2}
         >
           <CartesianGrid stroke={GRID} vertical={vertical} horizontal={!vertical} />
-          {vertical ? (
-            <>
-              <XAxis type="number" {...AXIS} domain={yDomain ?? [0, 'auto']} />
-              <YAxis type="category" dataKey={x} {...AXIS} axisLine={false} width={120} />
-            </>
-          ) : (
-            <>
-              <XAxis dataKey={x} {...AXIS} minTickGap={8} />
-              <YAxis {...AXIS} axisLine={false} domain={yDomain ?? [0, 'auto']} width={44} />
-            </>
-          )}
+          {/* Recharts 2 only finds axes that are direct children (not inside fragments). */}
+          <XAxis
+            type={vertical ? 'number' : 'category'}
+            dataKey={vertical ? undefined : x}
+            {...AXIS}
+            minTickGap={vertical ? 0 : 8}
+            domain={vertical ? (yDomain ?? [0, 'auto']) : undefined}
+          />
+          <YAxis
+            type={vertical ? 'category' : 'number'}
+            dataKey={vertical ? x : undefined}
+            {...AXIS}
+            axisLine={false}
+            width={vertical ? 120 : 44}
+            domain={vertical ? undefined : (yDomain ?? [0, 'auto'])}
+          />
           <Tooltip {...tip} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
           {legend(series.length)}
           {series.slice(0, 4).map((s, i) => (

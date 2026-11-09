@@ -121,6 +121,18 @@ export default function ProfilePage() {
           )}
         </Card>
       </div>
+      <Card className="mt-5">
+        <CardHeader title="Health profile details" subtitle="Not available yet" />
+        <p className="text-sm text-stone">
+          Blood group, emergency contacts and other demographic details can’t be saved yet, because
+          the NEURIX server doesn’t store them. Conditions, medications, allergies, surgeries and
+          family history are available in{' '}
+          <Link href="/medical-records/history" className="text-gold-pale hover:text-gold">
+            My Health
+          </Link>
+          .
+        </p>
+      </Card>
     </>
   );
 }

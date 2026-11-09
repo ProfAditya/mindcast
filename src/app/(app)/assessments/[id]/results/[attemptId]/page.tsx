@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  Compass,
+  MessageCircle,
   Info,
   LifeBuoy,
   Printer,
@@ -15,7 +17,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/auth';
 import { assessmentApi } from '@/lib/api/services';
-import { BAND_LABEL, getModule, formFor, type Band } from '@/lib/assessments/engine';
+import {
+  bandLabel,
+  getModule,
+  formFor,
+  MODULES,
+  type Band,
+  type DomainResult,
+} from '@/lib/assessments/engine';
 import { VALIDATED, isValidated } from '@/lib/assessments/validated';
 import { localAttempts, type LocalAttempt } from '@/lib/assessments/storage';
 import {
@@ -43,7 +52,10 @@ export default function ResultPage() {
   );
 }
 
-const BAND_TONE: Record<Band, 'sage' | 'gold' | 'rose' | 'neutral'> = {
+const BAND_TONE: Record<Band, 'sage' | 'gold' | 'rose' | 'neutral' | 'blue'> = {
+  lower: 'blue',
+  balanced: 'neutral',
+  higher: 'blue',
   strength: 'sage',
   mixed: 'gold',
   explore: 'rose',
@@ -219,6 +231,47 @@ function ValidatedResult({ code, rid }: { code: keyof typeof VALIDATED; rid: str
   );
 }
 
+/** Position between two poles; the number is always printed so position is never conveyed by colour alone. */
+function Spectrum({ d }: { d: DomainResult }) {
+  const v = d.score ?? 50;
+  return (
+    <div>
+      <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
+        <span className="text-ivory">{d.label}</span>
+        <span className="tabular-nums text-stone">{d.score ?? '—'}/100</span>
+      </div>
+      <div
+        className="relative h-2 rounded-full bg-graphite-deep"
+        role="meter"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={d.score ?? undefined}
+        aria-label={`${d.label}: ${d.score ?? 'no result'} on a scale from ${d.poles?.[0]} (0) to ${d.poles?.[1]} (100)`}
+      >
+        <span className="absolute left-1/2 top-[-3px] h-[14px] w-px bg-divider" aria-hidden />
+        {d.score !== null && (
+          <span
+            className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-graphite bg-softblue"
+            style={{ left: `${v}%` }}
+            aria-hidden
+          />
+        )}
+      </div>
+      <div className="mt-1 flex justify-between gap-4 text-[11px] text-stone">
+        <span>{d.poles?.[0]}</span>
+        <span className="text-right">{d.poles?.[1]}</span>
+      </div>
+    </div>
+  );
+}
+
+function soulPrompt(title: string, domains: DomainResult[], date: string) {
+  const lines = domains
+    .filter((d) => d.score !== null)
+    .map((d) => `- ${d.label}: ${d.score}/100 (${bandLabel(d.band, d.poles)})`);
+  return `I completed the NEURIX exploratory module “${title}” on ${date}. These are self-reflection scores, not a diagnosis:\n${lines.join('\n')}\nCan you help me understand what these results might mean for me, and what I could reflect on first?`;
+}
+
 function ExploratoryResultView({ moduleId, aid }: { moduleId: string; aid: string }) {
   const { profile } = useAuth();
   const m = getModule(moduleId);
@@ -232,25 +285,35 @@ function ExploratoryResultView({ moduleId, aid }: { moduleId: string; aid: strin
     return (
       <EmptyState
         title="Result not found on this device"
-        body="Exploratory results are stored in the browser where you took them. They may have been cleared, or taken on another device."
+        body="Exploratory results are stored in the browser where you took them. They may have been cleared, taken on another device, or belong to an earlier version of the Assessment Centre."
         action={<ButtonLink href="/assessments">Assessment Centre</ButtonLink>}
       />
     );
   const { a, all } = state;
   const r = a.result;
-  const prev = all.filter((x) => x.completed_at < a.completed_at)[0];
-  const radar = r.domains.map((d) => ({
+  const wellbeing = r.domains.filter((d) => d.kind !== 'tendency');
+  const tendencies = r.domains.filter((d) => d.kind === 'tendency');
+  // Only compare with earlier attempts of the same version: changed questions make scores incomparable.
+  const sameVersion = all.filter((x) => x.version === a.version);
+  const prev = sameVersion.filter((x) => x.completed_at < a.completed_at)[0];
+  const radarDomains = wellbeing.length >= 3 ? wellbeing : tendencies.length >= 3 ? tendencies : [];
+  const radar = radarDomains.map((d) => ({
     domain: d.label,
     current: d.score ?? 0,
     ...(prev ? { previous: prev.result.domains.find((p) => p.id === d.id)?.score ?? 0 } : {}),
   }));
-  const bars = r.domains.map((d) => ({ domain: d.label, score: d.score }));
-  const trend = [...all].reverse().map((x) => ({
+  const bars = wellbeing.map((d) => ({ domain: d.label, score: d.score }));
+  const trend = [...sameVersion].reverse().map((x) => ({
     date: fmtDate(x.completed_at, { day: 'numeric', month: 'short' }),
     overall: x.result.overall,
   }));
   const form = formFor(m, a.length);
   const texts = form.filter((q) => (q.format === 'text' && a.answers[q.id]) || a.followUps[q.id]);
+  const completion = Math.round((r.answered / r.total) * 100);
+  const suggested = (r.suggestedModules ?? [])
+    .map((id) => MODULES.find((x) => x.id === id))
+    .filter(Boolean) as typeof MODULES;
+  const soulHref = `/soul?draft=${encodeURIComponent(soulPrompt(m.title, r.domains, fmtDate(a.completed_at)))}`;
 
   return (
     <>
@@ -264,88 +327,121 @@ function ExploratoryResultView({ moduleId, aid }: { moduleId: string; aid: strin
         icon={<Info className="h-4 w-4 text-softblue" />}
         title="Exploratory · not clinically validated · saved on this device"
       >
-        These scores reflect your answers on this occasion and are meant to prompt reflection. They
-        are not a diagnosis or a measure of any condition.
+        These results reflect your answers on this occasion and are meant to prompt reflection. They
+        are not a diagnosis, a measure of any condition, or a personality type.
       </Notice>
+
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat
+          label="Overall (wellbeing areas)"
+          value={r.overall != null ? `${r.overall}/100` : '—'}
+          hint={
+            r.overall == null
+              ? tendencies.length
+                ? 'Tendencies are not averaged'
+                : 'Not enough answers'
+              : `Average of ${wellbeing.filter((d) => d.score !== null).length} areas`
+          }
+        />
+        <Stat
+          label="Completion"
+          value={`${completion}%`}
+          hint={`${r.answered} of ${r.total} answered`}
+        />
+        <Stat label="Form" value={`${a.length} questions`} hint={`Version ${r.version}`} />
+        <Stat
+          label="Attempts"
+          value={sameVersion.length}
+          hint={prev ? `Previous: ${fmtDate(prev.completed_at)}` : 'First attempt of this version'}
+        />
+      </div>
+
       <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1.3fr]">
         <Card>
-          <div className="grid grid-cols-2 gap-3">
-            <Stat
-              label="Overall"
-              value={r.overall != null ? `${r.overall}/100` : '—'}
-              hint="Average of areas"
-            />
-            <Stat
-              label="Answered"
-              value={`${r.answered}/${r.total}`}
-              hint={`${a.length}-question form · v${r.version}`}
-            />
-          </div>
-          <ul className="mt-5 space-y-4">
+          <CardHeader title="Area by area" />
+          <ul className="space-y-5">
             {r.domains.map((d) => (
               <li key={d.id}>
-                {d.score !== null ? (
+                {d.kind === 'tendency' ? (
+                  <Spectrum d={d} />
+                ) : d.score !== null ? (
                   <Meter value={d.score} label={d.label} />
                 ) : (
                   <p className="text-sm text-ivory">{d.label}</p>
                 )}
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <Badge tone={BAND_TONE[d.band]}>{BAND_LABEL[d.band]}</Badge>
-                  <span className="text-xs text-stone">{d.summary}</span>
+                  <Badge tone={BAND_TONE[d.band]}>{bandLabel(d.band, d.poles)}</Badge>
+                  <span className="text-xs text-stone">
+                    {d.summary} · {d.answered}/{d.total} answered
+                  </span>
                 </div>
               </li>
             ))}
           </ul>
         </Card>
         <Card>
-          <RadarProfile
-            data={radar}
-            axis="domain"
-            title="Your profile"
-            desc={prev ? `This attempt vs ${fmtDate(prev.completed_at)}` : 'Scores 0–100 per area'}
-            series={[
-              { key: 'current', label: 'This attempt' },
-              ...(prev ? [{ key: 'previous', label: 'Previous attempt' }] : []),
-            ]}
-          />
+          {radar.length ? (
+            <RadarProfile
+              data={radar}
+              axis="domain"
+              title={radarDomains === wellbeing ? 'Your profile' : 'Your tendency profile'}
+              desc={
+                prev
+                  ? `This attempt vs ${fmtDate(prev.completed_at)}`
+                  : radarDomains === wellbeing
+                    ? 'Scores 0–100 per area'
+                    : '0 and 100 are the two poles of each dimension'
+              }
+              series={[
+                { key: 'current', label: 'This attempt' },
+                ...(prev ? [{ key: 'previous', label: 'Previous attempt' }] : []),
+              ]}
+            />
+          ) : (
+            <EmptyState title="Not enough areas for a profile chart" />
+          )}
         </Card>
       </div>
+
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        {bars.length > 0 && (
+          <Card>
+            <BarsChart
+              data={bars}
+              x="domain"
+              xLabel="Area"
+              layout="vertical"
+              title="Wellbeing areas"
+              desc="0–100, higher is more favourable"
+              series={[{ key: 'score', label: 'Score' }]}
+              yDomain={[0, 100]}
+              height={Math.max(160, bars.length * 44)}
+            />
+          </Card>
+        )}
         <Card>
-          <BarsChart
-            data={bars}
-            x="domain"
-            xLabel="Area"
-            layout="vertical"
-            title="Scores by area"
-            desc="0–100, higher is more favourable"
-            series={[{ key: 'score', label: 'Score' }]}
-            yDomain={[0, 100]}
-            height={240}
-          />
-        </Card>
-        <Card>
-          {trend.length >= 2 ? (
+          {trend.length >= 2 && trend.some((t) => t.overall != null) ? (
             <TrendChart
               data={trend}
               x="date"
               title="Overall score over time"
-              desc={`${trend.length} attempts on this device`}
+              desc={`${trend.length} attempts of version ${a.version} on this device`}
               series={[{ key: 'overall', label: 'Overall' }]}
               yDomain={[0, 100]}
             />
           ) : (
             <EmptyState
               icon={<TrendingUp className="h-5 w-5" />}
-              title="Take this module again later to compare"
-              body="Your history builds up with each attempt."
+              title="Retake later to compare"
+              body="Each attempt is saved separately, so you can see what changes over time."
             />
           )}
         </Card>
       </div>
+
       <div className="mt-5 grid gap-5 md:grid-cols-3">
         <Card>
-          <CardHeader title="Relative strengths" icon={<Sparkles className="h-4 w-4" />} />
+          <CardHeader title="Potential strengths" icon={<Sparkles className="h-4 w-4" />} />
           {r.strengths.length ? (
             <ul className="space-y-1.5 text-sm text-ivory">
               {r.strengths.map((s) => (
@@ -354,12 +450,14 @@ function ExploratoryResultView({ moduleId, aid }: { moduleId: string; aid: strin
             </ul>
           ) : (
             <p className="text-sm text-stone">
-              No area reached the “relative strength” band this time.
+              {wellbeing.length
+                ? 'No area reached the “relative strength” band this time.'
+                : 'This module describes tendencies, which are not strengths or weaknesses.'}
             </p>
           )}
         </Card>
         <Card>
-          <CardHeader title="Areas to explore" icon={<Target className="h-4 w-4" />} />
+          <CardHeader title="Areas you may wish to explore" icon={<Target className="h-4 w-4" />} />
           {r.explore.length ? (
             <ul className="space-y-1.5 text-sm text-ivory">
               {r.explore.map((s) => (
@@ -371,7 +469,7 @@ function ExploratoryResultView({ moduleId, aid }: { moduleId: string; aid: strin
           )}
         </Card>
         <Card>
-          <CardHeader title="Patterns" icon={<TrendingUp className="h-4 w-4" />} />
+          <CardHeader title="Answer patterns" icon={<TrendingUp className="h-4 w-4" />} />
           <ul className="space-y-2 text-sm text-stone">
             {r.patterns.map((s) => (
               <li key={s}>{s}</li>
@@ -379,20 +477,76 @@ function ExploratoryResultView({ moduleId, aid }: { moduleId: string; aid: strin
           </ul>
         </Card>
       </div>
-      <Card className="mt-5">
-        <CardHeader
-          title="Small things you could try"
-          subtitle="General wellbeing ideas, not treatment advice."
-        />
-        <ul className="space-y-2 text-sm text-ivory">
-          {r.recommendations.map((s) => (
-            <li key={s} className="flex gap-2">
-              <span className="text-gold">•</span>
-              {s}
-            </li>
-          ))}
-        </ul>
-      </Card>
+
+      {r.situational?.length > 0 && (
+        <Card className="mt-5">
+          <CardHeader title="Situational responses" subtitle={r.situationalSummary ?? undefined} />
+          <ul className="space-y-3 text-sm">
+            {r.situational.map((x) => (
+              <li key={x.question} className="rounded-xl border border-bronze bg-graphite-deep p-3">
+                <p className="text-stone">{x.question}</p>
+                <p className="mt-1 text-ivory">→ {x.answer}</p>
+                <p className="mt-1 text-[11px] text-stone">Area: {x.domain}</p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+        <Card>
+          <CardHeader
+            title="Personal suggestions"
+            subtitle="Based on the areas above. General wellbeing ideas, not treatment advice."
+          />
+          <ul className="space-y-2 text-sm text-ivory">
+            {r.recommendations.map((s) => (
+              <li key={s} className="flex gap-2">
+                <span className="text-gold" aria-hidden>
+                  •
+                </span>
+                {s}
+              </li>
+            ))}
+          </ul>
+        </Card>
+        <Card>
+          <CardHeader
+            title="Talk it through with SOUL"
+            icon={<MessageCircle className="h-4 w-4" />}
+          />
+          <p className="text-sm text-stone">
+            SOUL can’t see device-stored results. This opens SOUL with a message listing your area
+            scores, which you can edit before sending.
+          </p>
+          <ButtonLink href={soulHref} variant="secondary" className="mt-4">
+            Discuss with SOUL
+          </ButtonLink>
+        </Card>
+      </div>
+
+      {suggested.length > 0 && (
+        <Card className="mt-5">
+          <CardHeader
+            title="Assessments you might find useful next"
+            icon={<Compass className="h-4 w-4" />}
+          />
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {suggested.map((s) => (
+              <li key={s.id}>
+                <Link
+                  href={`/assessments/${s.id}`}
+                  className="block rounded-xl border border-bronze bg-graphite-deep p-3 hover:border-gold-line"
+                >
+                  <p className="text-sm font-medium text-ivory">{s.title}</p>
+                  <p className="text-xs text-stone">{s.tagline}</p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       {texts.length > 0 && (
         <Card className="mt-5">
           <CardHeader
@@ -411,17 +565,24 @@ function ExploratoryResultView({ moduleId, aid }: { moduleId: string; aid: strin
           </ul>
         </Card>
       )}
+
       <Card className="mt-5">
         <CardHeader title="How this was scored, and its limits" />
         <p className="text-sm text-stone">{r.scoring}</p>
         <ul className="mt-3 space-y-1.5 text-sm text-stone">
           {r.limitations.map((l) => (
             <li key={l} className="flex gap-2">
-              <span>–</span>
+              <span aria-hidden>–</span>
               {l}
             </li>
           ))}
         </ul>
+        {r.answered < r.total && (
+          <p className="mt-3 text-sm text-stone">
+            Missing information: {r.total - r.answered} question
+            {r.total - r.answered > 1 ? 's were' : ' was'} skipped.
+          </p>
+        )}
       </Card>
     </>
   );

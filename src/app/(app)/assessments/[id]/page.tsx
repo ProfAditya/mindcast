@@ -8,7 +8,6 @@ import { errorMessage } from '@/lib/api/client';
 import {
   getModule,
   formFor,
-  LENGTHS,
   needsFollowUp,
   scoreExploratory,
   type Length,
@@ -114,8 +113,8 @@ function Exploratory({ id }: { id: string }) {
       version={m.version}
       title={m.title}
       kind="exploratory"
-      lengths={LENGTHS}
-      defaultLength={30}
+      lengths={m.lengths}
+      defaultLength={m.lengths[0]}
       intro={
         <>
           <p>{m.description}</p>
@@ -124,6 +123,15 @@ function Exploratory({ id }: { id: string }) {
             This is a NEURIX reflection module, not a validated clinical test. Answer for the past
             two weeks or so. There are no right or wrong answers, and you can skip any question.
           </p>
+          <p>
+            Situational questions ask how you would probably respond. Your choice describes what you
+            expect, not proof of how you behave.
+          </p>
+          {m.sensitive && (
+            <p className="rounded-xl border border-rose/30 bg-rose/5 p-3 text-ivory">
+              {m.sensitive}
+            </p>
+          )}
         </>
       }
       questionsFor={(len: Length) =>

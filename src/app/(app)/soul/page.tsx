@@ -147,6 +147,14 @@ function Chat({ journalOk, medicalOk }: { journalOk: boolean; medicalOk: boolean
   const convs = useQuery({ queryKey: ['ai', 'conversations'], queryFn: aiApi.conversations });
   const [active, setActive] = useState<string | null>(null);
   const [text, setText] = useState('');
+  // A result page can open SOUL with a pre-written message (?draft=…). It is only placed in the box; the user decides whether to send it.
+  useEffect(() => {
+    const d = new URLSearchParams(window.location.search).get('draft');
+    if (d) {
+      setText(d.slice(0, 4000));
+      window.history.replaceState(null, '', '/soul');
+    }
+  }, []);
   const [incJournal, setIncJournal] = useState(false);
   const [incMedical, setIncMedical] = useState(false);
   const [failure, setFailure] = useState<{

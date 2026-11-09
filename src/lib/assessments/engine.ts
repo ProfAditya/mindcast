@@ -32,8 +32,21 @@ export interface Module {
   title: string;
   tagline: string;
   description: string;
-  domains: { id: string; label: string; about: string; low: string; high: string }[];
+  domains: ModuleDomain[];
   questions: Question[];
+  lengths: Length[];
+  sensitive?: string;
+  related: string[];
+}
+export interface ModuleDomain {
+  id: string;
+  label: string;
+  about: string;
+  low: string;
+  high: string;
+  kind: 'wellbeing' | 'tendency';
+  poles?: [string, string];
+  source: string;
 }
 
 const LIKERT5 = [
@@ -125,8 +138,18 @@ function build(spec: ModuleSpec): Module {
   for (let i = 0; i < max; i++)
     for (const d of spec.domains)
       if (d.items[i]) questions.push(parseItem(d.items[i], d.id, i, spec.id));
-  const { domains, ...rest } = spec;
-  return { ...rest, domains: domains.map(({ items: _items, ...d }) => d), questions };
+  const { domains, lengths, related, ...rest } = spec;
+  return {
+    ...rest,
+    lengths: lengths ?? [...LENGTHS],
+    related: related ?? [],
+    domains: domains.map(({ items: _items, kind, source, ...d }) => ({
+      ...d,
+      kind: kind ?? 'wellbeing',
+      source: source ?? `${spec.id}.${d.id}`,
+    })),
+    questions,
+  };
 }
 
 export const MODULES: Module[] = MODULE_SPECS.map(build);
@@ -153,13 +176,26 @@ export const needsFollowUp = (q: Question, a: Answer | undefined) => {
   return !!q.followUp && s !== null && s <= 0.25;
 };
 
-export type Band = 'explore' | 'mixed' | 'strength' | 'insufficient';
+export type Band =
+  'explore' | 'mixed' | 'strength' | 'lower' | 'balanced' | 'higher' | 'insufficient';
 export const BAND_LABEL: Record<Band, string> = {
   explore: 'Area to explore',
   mixed: 'Mixed',
   strength: 'Relative strength',
+  lower: 'Leans to the first pole',
+  balanced: 'Balanced',
+  higher: 'Leans to the second pole',
   insufficient: 'Not enough answers',
 };
+/** Human label for a band, naming the pole for tendency domains. */
+export const bandLabel = (b: Band, poles?: [string, string]) =>
+  b === 'lower' && poles
+    ? `Leans: ${poles[0]}`
+    : b === 'higher' && poles
+      ? `Leans: ${poles[1]}`
+      : BAND_LABEL[b];
+const tendencyBand = (score: number | null): Band =>
+  score === null ? 'insufficient' : score < 35 ? 'lower' : score <= 65 ? 'balanced' : 'higher';
 // Descriptive bands for self-reflection only. They are NOT clinical cut-offs.
 const band = (score: number | null): Band =>
   score === null ? 'insufficient' : score < 40 ? 'explore' : score < 70 ? 'mixed' : 'strength';
@@ -172,6 +208,14 @@ export interface DomainResult {
   answered: number;
   total: number;
   summary: string;
+  kind: 'wellbeing' | 'tendency';
+  poles?: [string, string];
+}
+export interface SituationalResponse {
+  question: string;
+  answer: string;
+  domain: string;
+  score: number;
 }
 export interface ExploratoryResult {
   module: string;
@@ -184,12 +228,27 @@ export interface ExploratoryResult {
   strengths: string[];
   explore: string[];
   patterns: string[];
+  situational: SituationalResponse[];
+  situationalSummary: string | null;
   recommendations: string[];
+  suggestedModules: string[];
   limitations: string[];
   scoring: string;
 }
 
 const TIPS: Record<string, string[]> = {
+  'thinking.problem_solving': [
+    'Next time a problem feels big, write it down in one sentence, then list three possible first steps.',
+  ],
+  'thinking.decisions': [
+    'For your next important choice, write down what matters most to you and compare each option against it.',
+  ],
+  'thinking.flexibility': [
+    'When plans change, try naming one thing you can still control before deciding what to do next.',
+  ],
+  'relationships.family': [
+    'If family life feels heavy, consider talking it through with someone you trust outside the family, or a professional.',
+  ],
   'sleep.routine': [
     'Pick a wake-up time you can keep every day, including weekends, for two weeks.',
     'Start a 20-minute wind-down: dim lights, no work, something calm.',
@@ -277,6 +336,8 @@ export const LIMITATIONS = [
   'This is an exploratory self-reflection module written for NEURIX. It has not been clinically validated.',
   'Scores describe your answers on this occasion only. They are not a diagnosis and do not measure any condition.',
   'Bands (“area to explore”, “mixed”, “relative strength”) are descriptive and are not clinical thresholds.',
+  'Tendency dimensions describe preferences between two poles; neither end is better, and they are not personality types.',
+  'Situational answers describe how you expect you would respond. They are not evidence of how you will actually behave.',
   'Results can change with mood, circumstances and how questions are interpreted.',
   'If something in your results worries you, talk to a GP or another qualified professional.',
 ];
@@ -293,7 +354,15 @@ export function scoreExploratory(m: Module, length: Length, answers: Answers): E
       scores.length >= Math.ceil(qs.length / 2) && scores.length > 0
         ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100)
         : null;
-    const b = band(score);
+    const b = d.kind === 'tendency' ? tendencyBand(score) : band(score);
+    const summary =
+      b === 'insufficient'
+        ? 'Answer more questions in this area to see a result.'
+        : d.kind === 'tendency' && b === 'balanced'
+          ? `Your answers sit between “${d.poles?.[0]}” and “${d.poles?.[1]}”.`
+          : score! < 50
+            ? d.low
+            : d.high;
     return {
       id: d.id,
       label: d.label,
@@ -301,15 +370,19 @@ export function scoreExploratory(m: Module, length: Length, answers: Answers): E
       band: b,
       answered: scores.length,
       total: qs.length,
-      summary:
-        b === 'insufficient'
-          ? 'Answer more questions in this area to see a score.'
-          : score! < 50
-            ? d.low
-            : d.high,
+      summary,
+      kind: d.kind,
+      poles: d.poles,
     };
   });
-  const valid = domains.filter((d) => d.score !== null) as (DomainResult & { score: number })[];
+
+  // Only wellbeing-kind areas are banded as strengths/areas to explore or averaged. Tendencies are never combined.
+  const valid = domains.filter(
+    (d) => d.score !== null && d.kind === 'wellbeing'
+  ) as (DomainResult & { score: number })[];
+  const tendencies = domains.filter(
+    (d) => d.score !== null && d.kind === 'tendency'
+  ) as (DomainResult & { score: number })[];
   const overall = valid.length
     ? Math.round(valid.reduce((a, d) => a + d.score, 0) / valid.length)
     : null;
@@ -338,22 +411,60 @@ export function scoreExploratory(m: Module, length: Length, answers: Answers): E
     patterns.push(
       `${explores.length} of ${valid.length} areas fall in “area to explore”. It may help to focus on one at a time.`
     );
-  if (valid.every((d) => d.band === 'strength'))
+  if (valid.length && valid.every((d) => d.band === 'strength'))
     patterns.push('Every area scored as a relative strength in this attempt.');
+  if (tendencies.length) {
+    const clearest = [...tendencies].sort(
+      (a, b) => Math.abs(b.score - 50) - Math.abs(a.score - 50) || a.id.localeCompare(b.id)
+    )[0];
+    patterns.push(
+      Math.abs(clearest.score - 50) <= 15
+        ? 'Your tendencies are fairly balanced — none leans strongly to either end.'
+        : `Your clearest tendency is ${clearest.label.toLowerCase()}: “${clearest.score > 50 ? clearest.poles?.[1] : clearest.poles?.[0]}” (${clearest.score}/100).`
+    );
+  }
   const unanswered = form.filter((q) => q.scored && itemScore(q, answers[q.id]) === null).length;
   if (unanswered)
     patterns.push(
       `${unanswered} scored question${unanswered > 1 ? 's were' : ' was'} skipped, so some areas are based on fewer answers.`
     );
 
+  const label = (id: string) => m.domains.find((d) => d.id === id)?.label ?? id;
+  const situational: SituationalResponse[] = form
+    .filter((q) => q.format === 'scenario' && itemScore(q, answers[q.id]) !== null)
+    .map((q) => ({
+      question: q.text,
+      answer: q.options.find((o) => o.value === answers[q.id])?.label ?? '',
+      domain: label(q.domain),
+      score: itemScore(q, answers[q.id])!,
+    }));
+  const wellbeingScenarios = situational.filter(
+    (s) => m.domains.find((d) => d.label === s.domain)?.kind === 'wellbeing'
+  );
+  const situationalSummary = !situational.length
+    ? null
+    : wellbeingScenarios.length
+      ? `In ${wellbeingScenarios.filter((s) => s.score >= 0.75).length} of ${wellbeingScenarios.length} situations about coping and wellbeing, you chose a response usually considered constructive. These are expected responses, not observed behaviour.`
+      : `You answered ${situational.length} situational question${situational.length > 1 ? 's' : ''}. They show how you expect you would respond, which feeds into your tendency results.`;
+
   const focus = [...valid]
     .sort((a, b) => a.score - b.score || a.id.localeCompare(b.id))
     .filter((d) => d.score < 70)
     .slice(0, 3);
-  const recommendations = focus.flatMap((d) => (TIPS[`${m.id}.${d.id}`] ?? []).slice(0, 1));
+  const recommendations = focus.flatMap((d) =>
+    (TIPS[m.domains.find((x) => x.id === d.id)!.source] ?? []).slice(0, 1)
+  );
+  if (tendencies.length && !valid.length)
+    recommendations.push(
+      'Notice situations where your preferences help you, and ones where stretching a little might help. Neither end of a tendency is better.'
+    );
   if (!recommendations.length)
     recommendations.push(
       'Keep doing what’s working, and revisit this module in a few weeks to compare.'
+    );
+  if (explores.length)
+    recommendations.push(
+      'If concerns persist or affect daily life, consider discussing them with a qualified professional.'
     );
 
   return {
@@ -367,8 +478,11 @@ export function scoreExploratory(m: Module, length: Length, answers: Answers): E
     strengths,
     explore,
     patterns,
+    situational,
+    situationalSummary,
     recommendations,
+    suggestedModules: m.related,
     limitations: LIMITATIONS,
-    scoring: `Each answered item is converted to 0–1 (favourable = 1; reverse-worded items are flipped), averaged per area and shown as 0–100. Areas need at least half their items answered. Module ${m.id} v${m.version}, ${length}-question form.`,
+    scoring: `Each answered item is converted to 0–1 (reverse-worded items are flipped), averaged per area and shown as 0–100. Areas need at least half their items answered. Wellbeing areas: higher = more favourable; tendency areas: position between two poles. The overall score averages wellbeing areas only. Module ${m.id} v${m.version}, ${length}-question form.`,
   };
 }

@@ -166,7 +166,7 @@ export function AssessmentRunner(p: RunnerProps) {
         </div>
         <h1 className="mt-3 text-2xl font-semibold">{p.title}</h1>
         <div className="mt-3 space-y-3 text-sm text-stone">{p.intro}</div>
-        {p.lengths && (
+        {p.lengths && p.lengths.length > 1 && (
           <fieldset className="mt-6">
             <legend className="mb-2 text-sm font-medium">Choose a length</legend>
             <div className="grid grid-cols-3 gap-2" role="radiogroup">
@@ -193,7 +193,7 @@ export function AssessmentRunner(p: RunnerProps) {
             </div>
           </fieldset>
         )}
-        {!p.lengths && (
+        {(!p.lengths || p.lengths.length <= 1) && (
           <p className="mt-4 flex items-center gap-1.5 text-sm text-stone">
             <Clock className="h-4 w-4" />
             About {est(p.questionsFor(length).length)} minutes · {p.questionsFor(length).length}{' '}

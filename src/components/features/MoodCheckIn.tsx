@@ -92,7 +92,7 @@ export function MoodCheckIn({ compact, onDone }: { compact?: boolean; onDone?: (
       {compact && !more && (
         <button
           type="button"
-          className="text-xs text-gold-pale underline underline-offset-4 hover:text-gold"
+          className="block text-xs text-gold-pale underline underline-offset-4 hover:text-gold"
           onClick={() => setMore(true)}
         >
           Add energy, stress and a note

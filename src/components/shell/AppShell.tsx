@@ -46,8 +46,13 @@ export const PATIENT_NAV: NavGroup[] = [
     label: 'My Health',
     items: [
       { href: '/medical-records', label: 'Medical records', icon: FileHeart },
-      { href: '/assessments', label: 'Assessments', icon: ClipboardList, match: ['/assessments'] },
-      { href: '/assessment-history', label: 'Assessment history', icon: LineChart },
+      {
+        href: '/assessments',
+        label: 'Assessment Centre',
+        icon: ClipboardList,
+        match: ['/assessments'],
+      },
+      { href: '/assessment-history', label: 'My Results', icon: LineChart },
     ],
   },
   {
